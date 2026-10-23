@@ -436,17 +436,22 @@ function AccountsPage() {
 
             <div className='divider' />
 
-            {/* Selection controls */}
+            {/* Consolidated selection toolbar */}
             {total > 0 && (
-                <div className='flex flex-wrap items-center gap-2 mb-4 p-3 bg-light/5 rounded-lg'>
-                    <span className='text-sm text-light/80'>
-                        {selectedCount > 0
-                            ? (selectAllMode === 'all'
-                                ? `${selectedCount} selected of matching records${selectedCount >= MAX_RECORDS_PER_OPERATION ? ' (maximum reached)' : ''}`
-                                : `${selectedCount} of ${total} selected`)
-                            : `${total} records`}
-                    </span>
-                    <div className='flex gap-2 ml-auto'>
+                <div className='card flex flex-wrap items-center justify-between gap-3 p-3'>
+                    <div className='flex flex-wrap items-center gap-3 text-xs text-light/60'>
+                        <span>{total} record{total === 1 ? '' : 's'}</span>
+                        {selectedCount > 0 && (
+                            <>
+                                <span className='text-light/40'>·</span>
+                                <span>
+                                    {selectedCount} selected
+                                    {selectAllMode === 'all' && selectedCount >= MAX_RECORDS_PER_OPERATION && ' (maximum reached)'}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                    <div className='flex flex-wrap items-center gap-2'>
                         {selectAllMode === 'none' && (
                             <>
                                 <button
@@ -465,34 +470,24 @@ function AccountsPage() {
                                 </button>
                             </>
                         )}
+                        <button className='btn-ghost whitespace-nowrap text-xs' disabled={selectedCount === 0 || running} onClick={() => runOperation('claim_daily_reward')}>
+                            <Play className='h-3.5 w-3.5 mr-1' /> Login &amp; claim
+                        </button>
+                        <button className='btn-ghost whitespace-nowrap text-xs' disabled={selectedCount === 0 || running} onClick={() => runOperation('check_balance')}>
+                            <Play className='h-3.5 w-3.5 mr-1' /> Login &amp; check balance
+                        </button>
                         {selectedCount > 0 && (
                             <button
                                 type='button'
                                 onClick={clearSelection}
                                 className='btn btn-ghost text-xs text-red-400 hover:text-red-300'
                             >
-                                <XCircle className='w-4 h-4 mr-1' /> Clear selection
+                                <XCircle className='w-4 h-4 mr-1' /> Clear
                             </button>
                         )}
                     </div>
                 </div>
             )}
-
-            {/* Bulk actions */}
-            <div className='card flex flex-wrap items-center justify-between gap-3 p-3'>
-                <div className='flex items-center gap-3 text-xs text-light/60'>
-                    <span>{selectedCount} selected</span>
-                    <span className='hidden sm:inline'>of {total} record{total === 1 ? '' : 's'}</span>
-                </div>
-                <div className='flex items-center gap-2'>
-                    <button className='btn-ghost whitespace-nowrap' disabled={selectedCount === 0 || running} onClick={() => runOperation('claim_daily_reward')}>
-                        <Play className='h-3.5 w-3.5' /> Login &amp; claim
-                    </button>
-                    <button className='btn-ghost whitespace-nowrap' disabled={selectedCount === 0 || running} onClick={() => runOperation('check_balance')}>
-                        <Play className='h-3.5 w-3.5' /> Login &amp; check balance
-                    </button>
-                </div>
-            </div>
 
             <div className='divider' />
 

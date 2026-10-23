@@ -1,6 +1,7 @@
 // Operation routes: run the existing login.js logic against the authenticated
 // user's own accounts. Nothing runs until the user explicitly confirms.
 const express = require('express');
+const mongoose = require('mongoose');
 const operations = require('../services/operations');
 const accounts = require('../services/accounts');
 const { badRequest } = require('../lib/errors');
@@ -49,7 +50,15 @@ router.post('/run', async (req, res, next) => {
             const Account = require('../models/Account');
             const Operation = require('../models/Operation');
 
-            const token = await SelectionToken.findOne({ _id: selectionToken, ownerId: req.user.id, resourceType: 'accounts' });
+            // Convert selectionToken to ObjectId if it's a valid string
+            let tokenId;
+            try {
+                tokenId = new mongoose.Types.ObjectId(selectionToken);
+            } catch (err) {
+                throw badRequest('Invalid selection token format');
+            }
+
+            const token = await SelectionToken.findOne({ _id: tokenId, ownerId: req.user.id, resourceType: 'accounts' });
             if (!token) throw badRequest('Invalid or expired selection token');
 
             // Build query from stored filters
@@ -71,12 +80,12 @@ router.post('/run', async (req, res, next) => {
             while (hasMore && selectedAccountIds.length < MAX_RECORDS_PER_OPERATION) {
                 const remaining = MAX_RECORDS_PER_OPERATION - selectedAccountIds.length;
                 const batchSize = Math.min(SELECTION_BATCH_SIZE, remaining);
-                
+
                 const accounts = await Account.find(query)
                     .select('_id')
                     .skip(skip)
                     .limit(batchSize);
-                
+
                 if (accounts.length === 0) {
                     hasMore = false;
                 } else {

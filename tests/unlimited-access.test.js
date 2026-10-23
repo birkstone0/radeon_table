@@ -137,7 +137,7 @@ function testUnlimitedAccessQuotaPreservation() {
 function testBatchLimitForUnlimitedUsers() {
     console.log('Testing batch limit for unlimited users...');
 
-    const MAX_RECORDS_PER_OPERATION = 1500;
+    const MAX_RECORDS_PER_OPERATION = 2000;
 
     // Simulate batch limit enforcement
     function getMaxBatchSize(user) {
@@ -149,9 +149,9 @@ function testBatchLimitForUnlimitedUsers() {
     const limitedUser = { role: 'user', accessType: 'limited', maxAccountsPerBatch: 50 };
     const adminUser = { role: 'admin', accessType: 'limited', maxAccountsPerBatch: 50 };
 
-    assert.strictEqual(getMaxBatchSize(unlimitedUser), MAX_RECORDS_PER_OPERATION, 'Unlimited user should have 1500 limit');
+    assert.strictEqual(getMaxBatchSize(unlimitedUser), MAX_RECORDS_PER_OPERATION, 'Unlimited user should have 2000 limit');
     assert.strictEqual(getMaxBatchSize(limitedUser), 50, 'Limited user should have 50 limit');
-    assert.strictEqual(getMaxBatchSize(adminUser), MAX_RECORDS_PER_OPERATION, 'Admin should have 1500 limit');
+    assert.strictEqual(getMaxBatchSize(adminUser), MAX_RECORDS_PER_OPERATION, 'Admin should have 2000 limit');
 
     console.log('✓ Batch limit for unlimited users test passed');
 }

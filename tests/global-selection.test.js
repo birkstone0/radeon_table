@@ -154,35 +154,36 @@ function testGlobalSelectAllWorkflow() {
 }
 
 function testSelectionLimitRemoval() {
-    console.log('Testing selection limit with 1500 record maximum...');
+    console.log('Testing selection limit with 2000 record maximum...');
 
-    const MAX_RECORDS_PER_OPERATION = 1500;
+    const MAX_RECORDS_PER_OPERATION = 2000;
 
     // Test that 102 records can be selected (as in the bug report)
     const selectedCount1 = 102;
     const canProcess1 = selectedCount1 <= MAX_RECORDS_PER_OPERATION;
     assert.strictEqual(canProcess1, true, '102 records should be selectable');
 
-    // Test that 1500 records can be selected
-    const selectedCount2 = 1500;
+    // Test that 2000 records can be selected
+    const selectedCount2 = 2000;
     const canProcess2 = selectedCount2 <= MAX_RECORDS_PER_OPERATION;
-    assert.strictEqual(canProcess2, true, '1500 records should be selectable at maximum');
+    assert.strictEqual(canProcess2, true, '2000 records should be selectable at maximum');
 
-    // Test that 1501 records are capped at 1500
-    const selectedCount3 = 1501;
+    // Test that 2001 records are capped at 2000
+    const selectedCount3 = 2001;
     const cappedCount = Math.min(selectedCount3, MAX_RECORDS_PER_OPERATION);
-    assert.strictEqual(cappedCount, 1500, '1501 records should be capped at 1500');
+    assert.strictEqual(cappedCount, 2000, '2001 records should be capped at 2000');
 
-    // Test that the backend caps at 1500
+    // Test that the backend caps at 2000
     function capSelection(count) {
         return Math.min(count, MAX_RECORDS_PER_OPERATION);
     }
 
     assert.strictEqual(capSelection(102), 102, '102 records should not be capped');
     assert.strictEqual(capSelection(1500), 1500, '1500 records should not be capped');
-    assert.strictEqual(capSelection(2000), 1500, '2000 records should be capped at 1500');
+    assert.strictEqual(capSelection(2000), 2000, '2000 records should not be capped');
+    assert.strictEqual(capSelection(2500), 2000, '2500 records should be capped at 2000');
 
-    console.log('✓ Selection limit with 1500 record maximum test passed');
+    console.log('✓ Selection limit with 2000 record maximum test passed');
 }
 
 function testAccountsSelectionToken() {
@@ -212,17 +213,22 @@ function testAccountsSelectionToken() {
 function testSelectionCapBehavior() {
     console.log('Testing selection cap behavior...');
 
-    const MAX_RECORDS_PER_OPERATION = 1500;
+    const MAX_RECORDS_PER_OPERATION = 2000;
 
     // Test the exact scenario from the bug report: 102 records matching
     const totalMatching = 102;
     const cappedCount = Math.min(totalMatching, MAX_RECORDS_PER_OPERATION);
     assert.strictEqual(cappedCount, 102, '102 matching records should all be selected');
 
-    // Test that when 2000 records match, only 1500 are selected
+    // Test that when 2000 records match, all 2000 are selected
     const totalMatching2 = 2000;
     const cappedCount2 = Math.min(totalMatching2, MAX_RECORDS_PER_OPERATION);
-    assert.strictEqual(cappedCount2, 1500, '2000 matching records should be capped at 1500');
+    assert.strictEqual(cappedCount2, 2000, '2000 matching records should not be capped');
+
+    // Test that when 2500 records match, only 2000 are selected
+    const totalMatching3 = 2500;
+    const cappedCount3 = Math.min(totalMatching3, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount3, 2000, '2500 matching records should be capped at 2000');
 
     // Test the message generation
     function generateSelectionMessage(totalCount, cappedCount) {
@@ -235,8 +241,11 @@ function testSelectionCapBehavior() {
     const message1 = generateSelectionMessage(102, 102);
     assert.strictEqual(message1, 'Selected all 102 records matching current filters', 'Message should not show cap for 102 records');
 
-    const message2 = generateSelectionMessage(2000, 1500);
-    assert.strictEqual(message2, 'Selected 1500 records (maximum reached). 500 additional records remain unselected.', 'Message should show cap for 2000 records');
+    const message2 = generateSelectionMessage(2000, 2000);
+    assert.strictEqual(message2, 'Selected all 2000 records matching current filters', 'Message should not show cap for 2000 records');
+
+    const message3 = generateSelectionMessage(2500, 2000);
+    assert.strictEqual(message3, 'Selected 2000 records (maximum reached). 500 additional records remain unselected.', 'Message should show cap for 2500 records');
 
     console.log('✓ Selection cap behavior test passed');
 }
@@ -244,7 +253,7 @@ function testSelectionCapBehavior() {
 function testSelectionAcrossPagination() {
     console.log('Testing selection across pagination...');
 
-    const MAX_RECORDS_PER_OPERATION = 1500;
+    const MAX_RECORDS_PER_OPERATION = 2000;
     const pageSize = 25;
     const totalRecords = 102;
 
@@ -257,11 +266,83 @@ function testSelectionAcrossPagination() {
     assert.strictEqual(selectedAll, 102, 'All 102 records should be selectable across pagination');
 
     // Test that when total exceeds limit, it's capped
-    const totalRecords2 = 1600;
+    const totalRecords2 = 2500;
     const selectedAll2 = Math.min(totalRecords2, MAX_RECORDS_PER_OPERATION);
-    assert.strictEqual(selectedAll2, 1500, '1600 records should be capped at 1500 across pagination');
+    assert.strictEqual(selectedAll2, 2000, '2500 records should be capped at 2000 across pagination');
 
     console.log('✓ Selection across pagination test passed');
+}
+
+function testSelection1500Records() {
+    console.log('Testing selection of 1500 records...');
+
+    const MAX_RECORDS_PER_OPERATION = 2000;
+
+    const totalMatching = 1500;
+    const cappedCount = Math.min(totalMatching, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount, 1500, '1500 matching records should all be selected');
+
+    const canProcess = totalMatching <= MAX_RECORDS_PER_OPERATION;
+    assert.strictEqual(canProcess, true, '1500 records should be selectable');
+
+    console.log('✓ Selection of 1500 records test passed');
+}
+
+function testSelection2000Records() {
+    console.log('Testing selection of 2000 records...');
+
+    const MAX_RECORDS_PER_OPERATION = 2000;
+
+    const totalMatching = 2000;
+    const cappedCount = Math.min(totalMatching, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount, 2000, '2000 matching records should all be selected');
+
+    const canProcess = totalMatching <= MAX_RECORDS_PER_OPERATION;
+    assert.strictEqual(canProcess, true, '2000 records should be selectable at maximum');
+
+    console.log('✓ Selection of 2000 records test passed');
+}
+
+function testSelection2001Records() {
+    console.log('Testing selection of 2001 records (cap at 2000)...');
+
+    const MAX_RECORDS_PER_OPERATION = 2000;
+
+    const totalMatching = 2001;
+    const cappedCount = Math.min(totalMatching, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount, 2000, '2001 matching records should be capped at 2000');
+
+    const canProcess = totalMatching <= MAX_RECORDS_PER_OPERATION;
+    assert.strictEqual(canProcess, false, '2001 records exceed the limit');
+
+    const remaining = totalMatching - cappedCount;
+    assert.strictEqual(remaining, 1, '1 record should remain unselected');
+
+    console.log('✓ Selection of 2001 records test passed');
+}
+
+function testImportLimitUnchanged() {
+    console.log('Testing that import limit remains at 1500...');
+
+    const MAX_IMPORT_RECORDS = 1500;
+    const MAX_RECORDS_PER_OPERATION = 2000;
+
+    // Verify import limit is different from selection limit
+    assert.strictEqual(MAX_IMPORT_RECORDS, 1500, 'Import limit should remain at 1500');
+    assert.strictEqual(MAX_RECORDS_PER_OPERATION, 2000, 'Selection limit should be 2000');
+    assert.notStrictEqual(MAX_IMPORT_RECORDS, MAX_RECORDS_PER_OPERATION, 'Import and selection limits should be different');
+
+    // Test that 1500 records can be imported
+    const importCount = 1500;
+    const canImport = importCount <= MAX_IMPORT_RECORDS;
+    assert.strictEqual(canImport, true, '1500 records should be importable');
+
+    // Test that 1501 records cannot be imported
+    const importCount2 = 1501;
+    const canImport2 = importCount2 <= MAX_IMPORT_RECORDS;
+    assert.strictEqual(canImport2, false, '1501 records should exceed import limit');
+
+    console.log('✓ Import limit unchanged test passed');
 }
 
 // Run all tests
@@ -278,6 +359,10 @@ try {
     testAccountsSelectionToken();
     testSelectionCapBehavior();
     testSelectionAcrossPagination();
+    testSelection1500Records();
+    testSelection2000Records();
+    testSelection2001Records();
+    testImportLimitUnchanged();
     console.log('\n✓ All global selection tests passed');
 } catch (error) {
     console.error('\n✗ Test failed:', error.message);

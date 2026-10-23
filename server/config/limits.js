@@ -5,7 +5,7 @@
 const MAX_IMPORT_RECORDS = 1500;
 
 // Maximum number of records that can be processed in a single bulk operation
-const MAX_RECORDS_PER_OPERATION = 1500;
+const MAX_RECORDS_PER_OPERATION = 2000;
 
 // Batch size for database insertions during import (for performance)
 const IMPORT_BATCH_SIZE = 100;
@@ -20,7 +20,7 @@ const MAX_BATCH_STATUS_OPERATIONS = 500;
 const MAX_CONFIGURABLE_BATCH_LIMIT = 10000;
 
 // Default per-user batch limit for new users
-const DEFAULT_MAX_ACCOUNTS_PER_BATCH = 1500;
+const DEFAULT_MAX_ACCOUNTS_PER_BATCH = 2000;
 
 module.exports = {
     MAX_IMPORT_RECORDS,

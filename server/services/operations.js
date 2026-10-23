@@ -59,7 +59,15 @@ async function releaseSlot(operationId) {
 }
 
 async function findAccountForOwner(ownerId, accountId) {
-    return await Account.findOne({ _id: accountId, ownerId });
+    try {
+        // Convert accountId to ObjectId if it's a string
+        const mongoose = require('mongoose');
+        const objectId = typeof accountId === 'string' ? new mongoose.Types.ObjectId(accountId) : accountId;
+        return await Account.findOne({ _id: objectId, ownerId });
+    } catch (error) {
+        logger.error('OPS', `Invalid account ID format: ${accountId}`);
+        return null;
+    }
 }
 
 async function findOperationForOwner(ownerId, operationId) {
@@ -201,6 +209,7 @@ async function queueAccounts({ ownerId, operationType, accountIds }) {
         } catch (error) {
             // Refund the trial if operation creation fails
             logger.error('OPS', `Failed to create operation for account ${account.phoneMasked}: ${error.message}`);
+            logger.error('OPS', `Error name: ${error.name}`);
             await users.refundTrial(ownerId, operationType, 1);
             trialsCharged--;
             rejected.push({ accountId, phoneMasked: account.phoneMasked, reason: 'Failed to create operation' });
