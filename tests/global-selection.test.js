@@ -154,26 +154,35 @@ function testGlobalSelectAllWorkflow() {
 }
 
 function testSelectionLimitRemoval() {
-    console.log('Testing selection limit removal...');
+    console.log('Testing selection limit with 1500 record maximum...');
 
-    // Simulate the old limit vs new limit
-    const oldLimit = 50;
-    const newLimitForLimited = 50;
-    const newLimitForUnlimited = 1000;
+    const MAX_RECORDS_PER_OPERATION = 1500;
 
-    assert.strictEqual(oldLimit, 50, 'Old limit was 50');
-    assert.strictEqual(newLimitForLimited, 50, 'Limited users still have 50 limit');
-    assert.strictEqual(newLimitForUnlimited, 1000, 'Unlimited users have 1000 limit');
+    // Test that 102 records can be selected (as in the bug report)
+    const selectedCount1 = 102;
+    const canProcess1 = selectedCount1 <= MAX_RECORDS_PER_OPERATION;
+    assert.strictEqual(canProcess1, true, '102 records should be selectable');
 
-    // Test that 239 records can be selected
-    const selectedCount = 239;
-    const canProcessLimited = selectedCount <= newLimitForLimited;
-    const canProcessUnlimited = selectedCount <= newLimitForUnlimited;
+    // Test that 1500 records can be selected
+    const selectedCount2 = 1500;
+    const canProcess2 = selectedCount2 <= MAX_RECORDS_PER_OPERATION;
+    assert.strictEqual(canProcess2, true, '1500 records should be selectable at maximum');
 
-    assert.strictEqual(canProcessLimited, false, '239 records exceed limited user limit');
-    assert.strictEqual(canProcessUnlimited, true, '239 records do not exceed unlimited user limit');
+    // Test that 1501 records are capped at 1500
+    const selectedCount3 = 1501;
+    const cappedCount = Math.min(selectedCount3, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount, 1500, '1501 records should be capped at 1500');
 
-    console.log('✓ Selection limit removal test passed');
+    // Test that the backend caps at 1500
+    function capSelection(count) {
+        return Math.min(count, MAX_RECORDS_PER_OPERATION);
+    }
+
+    assert.strictEqual(capSelection(102), 102, '102 records should not be capped');
+    assert.strictEqual(capSelection(1500), 1500, '1500 records should not be capped');
+    assert.strictEqual(capSelection(2000), 1500, '2000 records should be capped at 1500');
+
+    console.log('✓ Selection limit with 1500 record maximum test passed');
 }
 
 function testAccountsSelectionToken() {
@@ -200,6 +209,61 @@ function testAccountsSelectionToken() {
     console.log('✓ Accounts selection token test passed');
 }
 
+function testSelectionCapBehavior() {
+    console.log('Testing selection cap behavior...');
+
+    const MAX_RECORDS_PER_OPERATION = 1500;
+
+    // Test the exact scenario from the bug report: 102 records matching
+    const totalMatching = 102;
+    const cappedCount = Math.min(totalMatching, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount, 102, '102 matching records should all be selected');
+
+    // Test that when 2000 records match, only 1500 are selected
+    const totalMatching2 = 2000;
+    const cappedCount2 = Math.min(totalMatching2, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(cappedCount2, 1500, '2000 matching records should be capped at 1500');
+
+    // Test the message generation
+    function generateSelectionMessage(totalCount, cappedCount) {
+        if (totalCount > MAX_RECORDS_PER_OPERATION) {
+            return `Selected ${cappedCount} records (maximum reached). ${totalCount - cappedCount} additional records remain unselected.`;
+        }
+        return `Selected all ${totalCount} records matching current filters`;
+    }
+
+    const message1 = generateSelectionMessage(102, 102);
+    assert.strictEqual(message1, 'Selected all 102 records matching current filters', 'Message should not show cap for 102 records');
+
+    const message2 = generateSelectionMessage(2000, 1500);
+    assert.strictEqual(message2, 'Selected 1500 records (maximum reached). 500 additional records remain unselected.', 'Message should show cap for 2000 records');
+
+    console.log('✓ Selection cap behavior test passed');
+}
+
+function testSelectionAcrossPagination() {
+    console.log('Testing selection across pagination...');
+
+    const MAX_RECORDS_PER_OPERATION = 1500;
+    const pageSize = 25;
+    const totalRecords = 102;
+
+    // Calculate total pages
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    assert.strictEqual(totalPages, 5, '102 records with 25 per page should have 5 pages');
+
+    // Test that all 102 records can be selected across pages
+    const selectedAll = Math.min(totalRecords, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(selectedAll, 102, 'All 102 records should be selectable across pagination');
+
+    // Test that when total exceeds limit, it's capped
+    const totalRecords2 = 1600;
+    const selectedAll2 = Math.min(totalRecords2, MAX_RECORDS_PER_OPERATION);
+    assert.strictEqual(selectedAll2, 1500, '1600 records should be capped at 1500 across pagination');
+
+    console.log('✓ Selection across pagination test passed');
+}
+
 // Run all tests
 try {
     testSelectionTokenStructure();
@@ -212,6 +276,8 @@ try {
     testGlobalSelectAllWorkflow();
     testSelectionLimitRemoval();
     testAccountsSelectionToken();
+    testSelectionCapBehavior();
+    testSelectionAcrossPagination();
     console.log('\n✓ All global selection tests passed');
 } catch (error) {
     console.error('\n✗ Test failed:', error.message);

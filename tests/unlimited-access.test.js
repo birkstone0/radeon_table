@@ -137,9 +137,11 @@ function testUnlimitedAccessQuotaPreservation() {
 function testBatchLimitForUnlimitedUsers() {
     console.log('Testing batch limit for unlimited users...');
 
+    const MAX_RECORDS_PER_OPERATION = 1500;
+
     // Simulate batch limit enforcement
     function getMaxBatchSize(user) {
-        if (user.role === 'admin' || user.accessType === 'unlimited') return 1000;
+        if (user.role === 'admin' || user.accessType === 'unlimited') return MAX_RECORDS_PER_OPERATION;
         return user.maxAccountsPerBatch || 50;
     }
 
@@ -147,11 +149,105 @@ function testBatchLimitForUnlimitedUsers() {
     const limitedUser = { role: 'user', accessType: 'limited', maxAccountsPerBatch: 50 };
     const adminUser = { role: 'admin', accessType: 'limited', maxAccountsPerBatch: 50 };
 
-    assert.strictEqual(getMaxBatchSize(unlimitedUser), 1000, 'Unlimited user should have 1000 limit');
+    assert.strictEqual(getMaxBatchSize(unlimitedUser), MAX_RECORDS_PER_OPERATION, 'Unlimited user should have 1500 limit');
     assert.strictEqual(getMaxBatchSize(limitedUser), 50, 'Limited user should have 50 limit');
-    assert.strictEqual(getMaxBatchSize(adminUser), 1000, 'Admin should have 1000 limit');
+    assert.strictEqual(getMaxBatchSize(adminUser), MAX_RECORDS_PER_OPERATION, 'Admin should have 1500 limit');
 
     console.log('✓ Batch limit for unlimited users test passed');
+}
+
+function testUnlimitedAccessBothOperations() {
+    console.log('Testing unlimited access applies to both operation types...');
+
+    // Simulate trial consumption for both operation types
+    function shouldConsumeTrial(user, operationType) {
+        if (user.role === 'admin') return false;
+        if (user.accessType === 'unlimited') return false;
+        return true;
+    }
+
+    const unlimitedUser = { role: 'user', accessType: 'unlimited', trials: { claim_daily_reward: 0, check_balance: 0 } };
+    const limitedUser = { role: 'user', accessType: 'limited', trials: { claim_daily_reward: 10, check_balance: 5 } };
+
+    // Test claim_daily_reward
+    assert.strictEqual(shouldConsumeTrial(unlimitedUser, 'claim_daily_reward'), false, 'Unlimited user should not consume claim trials');
+    assert.strictEqual(shouldConsumeTrial(limitedUser, 'claim_daily_reward'), true, 'Limited user should consume claim trials');
+
+    // Test check_balance
+    assert.strictEqual(shouldConsumeTrial(unlimitedUser, 'check_balance'), false, 'Unlimited user should not consume balance trials');
+    assert.strictEqual(shouldConsumeTrial(limitedUser, 'check_balance'), true, 'Limited user should consume balance trials');
+
+    console.log('✓ Unlimited access both operations test passed');
+}
+
+function testUnlimitedAccessDisplay() {
+    console.log('Testing unlimited access display in UI...');
+
+    // Simulate publicUser projection
+    function publicUser(user) {
+        const accessType = user.accessType || 'limited';
+        return {
+            trialsUnlimited: user.role === 'admin' || accessType === 'unlimited',
+            trials: user.trials || { claim_daily_reward: 0, check_balance: 0 }
+        };
+    }
+
+    const unlimitedUser = { role: 'user', accessType: 'unlimited', trials: { claim_daily_reward: 0, check_balance: 0 } };
+    const limitedUser = { role: 'user', accessType: 'limited', trials: { claim_daily_reward: 10, check_balance: 5 } };
+    const adminUser = { role: 'admin', accessType: 'limited', trials: { claim_daily_reward: 0, check_balance: 0 } };
+
+    const unlimitedProjected = publicUser(unlimitedUser);
+    assert.strictEqual(unlimitedProjected.trialsUnlimited, true, 'Unlimited user should have trialsUnlimited: true');
+    assert.strictEqual(unlimitedProjected.trials.claim_daily_reward, 0, 'Trials should still show 0 for unlimited user');
+    assert.strictEqual(unlimitedProjected.trials.check_balance, 0, 'Trials should still show 0 for unlimited user');
+
+    const limitedProjected = publicUser(limitedUser);
+    assert.strictEqual(limitedProjected.trialsUnlimited, false, 'Limited user should have trialsUnlimited: false');
+    assert.strictEqual(limitedProjected.trials.claim_daily_reward, 10, 'Limited user should show actual claim trials');
+    assert.strictEqual(limitedProjected.trials.check_balance, 5, 'Limited user should show actual balance trials');
+
+    const adminProjected = publicUser(adminUser);
+    assert.strictEqual(adminProjected.trialsUnlimited, true, 'Admin should have trialsUnlimited: true');
+
+    console.log('✓ Unlimited access display test passed');
+}
+
+function testUnlimitedAccessExpirationBehavior() {
+    console.log('Testing unlimited access expiration behavior...');
+
+    const now = Date.now();
+
+    // Simulate accessBlockedFor logic
+    function accessBlockedFor(user) {
+        if (user.role !== 'user') return { blocked: false };
+        if (user.status === 'revoked') return { blocked: true, reason: 'Access revoked' };
+        if (user.status === 'deactivated') return { blocked: true, reason: 'Account is deactivated' };
+
+        const accessType = user.accessType || 'limited';
+
+        if (accessType === 'unlimited') {
+            if (user.unlimitedAccessExpiresAt && new Date(user.unlimitedAccessExpiresAt).getTime() < now) {
+                return { blocked: true, reason: 'Unlimited access expired' };
+            }
+            return { blocked: false };
+        }
+
+        if (user.accessExpiresAt && new Date(user.accessExpiresAt).getTime() < now) {
+            return { blocked: true, reason: 'Access expired' };
+        }
+
+        return { blocked: false };
+    }
+
+    const activeUnlimited = { role: 'user', status: 'active', accessType: 'unlimited', unlimitedAccessExpiresAt: new Date(now + 7 * 24 * 60 * 60 * 1000) };
+    const expiredUnlimited = { role: 'user', status: 'active', accessType: 'unlimited', unlimitedAccessExpiresAt: new Date(now - 1000) };
+    const noExpirationUnlimited = { role: 'user', status: 'active', accessType: 'unlimited', unlimitedAccessExpiresAt: null };
+
+    assert.strictEqual(accessBlockedFor(activeUnlimited).blocked, false, 'Active unlimited access should not be blocked');
+    assert.strictEqual(accessBlockedFor(expiredUnlimited).blocked, true, 'Expired unlimited access should be blocked');
+    assert.strictEqual(accessBlockedFor(noExpirationUnlimited).blocked, false, 'Unlimited access with no expiration should not be blocked');
+
+    console.log('✓ Unlimited access expiration behavior test passed');
 }
 
 // Run all tests
@@ -163,6 +259,9 @@ try {
     testUnlimitedAccessTrialExemption();
     testUnlimitedAccessQuotaPreservation();
     testBatchLimitForUnlimitedUsers();
+    testUnlimitedAccessBothOperations();
+    testUnlimitedAccessDisplay();
+    testUnlimitedAccessExpirationBehavior();
     console.log('\n✓ All unlimited access tests passed');
 } catch (error) {
     console.error('\n✗ Test failed:', error.message);

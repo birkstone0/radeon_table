@@ -7,6 +7,7 @@ const Operation = require('../models/Operation');
 const Account = require('../models/Account');
 const { badRequest, notFound } = require('../lib/errors');
 const { parsePagination } = require('../lib/validate');
+const { MAX_RECORDS_PER_OPERATION } = require('../config/limits');
 
 const router = express.Router();
 
@@ -24,19 +25,21 @@ router.post('/accounts', async (req, res, next) => {
         if (filters.status) query.status = filters.status;
 
         // Count matching records
-        const count = await Account.countDocuments(query);
+        const totalCount = await Account.countDocuments(query);
+        const cappedCount = Math.min(totalCount, MAX_RECORDS_PER_OPERATION);
 
-        // Create selection token
+        // Create selection token with the capped count
         const token = await SelectionToken.create({
             ownerId: req.user.id,
             resourceType: 'accounts',
             filters,
-            estimatedCount: count
+            estimatedCount: cappedCount
         });
 
         return res.json({
             token: token._id,
-            count
+            count: cappedCount,
+            totalCount
         });
     } catch (error) {
         next(error);
@@ -109,15 +112,19 @@ router.get('/accounts/:token/ids', async (req, res, next) => {
         }
 
         const total = await Account.countDocuments(query);
+        const cappedTotal = Math.min(total, MAX_RECORDS_PER_OPERATION);
+
+        // Apply the limit to the actual query
+        const effectiveLimit = Math.min(limit, MAX_RECORDS_PER_OPERATION - offset);
         const items = await Account.find(query)
             .select('_id')
             .skip(offset)
-            .limit(limit);
+            .limit(effectiveLimit);
 
         return res.json({
             page,
             limit,
-            total,
+            total: cappedTotal,
             items: items.map(acc => acc._id)
         });
     } catch (error) {

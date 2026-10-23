@@ -37,6 +37,11 @@ router.post('/run', async (req, res, next) => {
 
         if (accountIds.length === 0 && !selectionToken) throw badRequest('Select at least one account');
 
+        // Enforce global limit on direct account IDs
+        if (accountIds.length > MAX_RECORDS_PER_OPERATION) {
+            throw badRequest(`Maximum ${MAX_RECORDS_PER_OPERATION} records per operation. Selected: ${accountIds.length}. Please process in smaller batches.`);
+        }
+
         let result;
         if (selectionToken) {
             // Use selection token to get all matching account IDs
@@ -63,18 +68,21 @@ router.post('/run', async (req, res, next) => {
             let skip = 0;
             let hasMore = true;
 
-            while (hasMore) {
+            while (hasMore && selectedAccountIds.length < MAX_RECORDS_PER_OPERATION) {
+                const remaining = MAX_RECORDS_PER_OPERATION - selectedAccountIds.length;
+                const batchSize = Math.min(SELECTION_BATCH_SIZE, remaining);
+                
                 const accounts = await Account.find(query)
                     .select('_id')
                     .skip(skip)
-                    .limit(SELECTION_BATCH_SIZE);
+                    .limit(batchSize);
                 
                 if (accounts.length === 0) {
                     hasMore = false;
                 } else {
                     selectedAccountIds.push(...accounts.map(a => a._id.toString()));
-                    skip += SELECTION_BATCH_SIZE;
-                    hasMore = accounts.length === SELECTION_BATCH_SIZE;
+                    skip += batchSize;
+                    hasMore = accounts.length === batchSize && selectedAccountIds.length < MAX_RECORDS_PER_OPERATION;
                 }
             }
 

@@ -140,11 +140,15 @@ function AccountsPage() {
                 status: statusFilter || null
             };
             const { data } = await selectionApi.createAccountsToken(filters);
+            const count = Math.min(data.count, MAX_RECORDS_PER_OPERATION);
             setSelectionToken(data.token);
-            setSelectedCount(data.count);
+            setSelectedCount(count);
             setSelectAllMode('all');
             setSelectedIds([]);
-            addToast(`Selected all ${data.count} records matching current filters`, 'success');
+            const message = data.count > MAX_RECORDS_PER_OPERATION
+                ? `Selected ${count} records (maximum reached). ${data.count - count} additional records remain unselected.`
+                : `Selected all ${data.count} records matching current filters`;
+            addToast(message, data.count > MAX_RECORDS_PER_OPERATION ? 'warning' : 'success');
         } catch (err) {
             addToast(err.message || 'Failed to select all records', 'error');
         }
@@ -436,7 +440,11 @@ function AccountsPage() {
             {total > 0 && (
                 <div className='flex flex-wrap items-center gap-2 mb-4 p-3 bg-light/5 rounded-lg'>
                     <span className='text-sm text-light/80'>
-                        {selectedCount > 0 ? `${selectedCount} of ${total} selected` : `${total} records`}
+                        {selectedCount > 0
+                            ? (selectAllMode === 'all'
+                                ? `${selectedCount} selected of matching records${selectedCount >= MAX_RECORDS_PER_OPERATION ? ' (maximum reached)' : ''}`
+                                : `${selectedCount} of ${total} selected`)
+                            : `${total} records`}
                     </span>
                     <div className='flex gap-2 ml-auto'>
                         {selectAllMode === 'none' && (
@@ -446,14 +454,14 @@ function AccountsPage() {
                                     onClick={selectAllPage}
                                     className='btn btn-ghost text-xs'
                                 >
-                                    <CheckSquare className='w-4 h-4 mr-1' /> Select page
+                                    <CheckSquare className='w-4 h-4 mr-1' /> Select Current Page
                                 </button>
                                 <button
                                     type='button'
                                     onClick={selectAllRecords}
                                     className='btn btn-ghost text-xs'
                                 >
-                                    <CheckSquare className='w-4 h-4 mr-1' /> Select all records
+                                    <CheckSquare className='w-4 h-4 mr-1' /> Select All Matching (up to {MAX_RECORDS_PER_OPERATION})
                                 </button>
                             </>
                         )}
@@ -497,12 +505,16 @@ function AccountsPage() {
                         <thead>
                             <tr>
                                 <th className='w-10'>
-                                    {selectAllMode === 'page' && selectedIds.length === accounts.length ? (
-                                        <button onClick={clearSelection} className='text-accent hover:text-accent/80'>
+                                    {selectAllMode === 'all' ? (
+                                        <button onClick={clearSelection} className='text-accent hover:text-accent/80' title={`All ${selectedCount} records selected`}>
+                                            <CheckSquare className='w-4 h-4' />
+                                        </button>
+                                    ) : selectAllMode === 'page' && selectedIds.length === accounts.length ? (
+                                        <button onClick={clearSelection} className='text-accent hover:text-accent/80' title={`${selectedIds.length} records on this page selected`}>
                                             <CheckSquare className='w-4 h-4' />
                                         </button>
                                     ) : (
-                                        <button onClick={selectAllPage} className='text-light/60 hover:text-light'>
+                                        <button onClick={selectAllPage} className='text-light/60 hover:text-light' title='Select this page'>
                                             <Square className='w-4 h-4' />
                                         </button>
                                     )}

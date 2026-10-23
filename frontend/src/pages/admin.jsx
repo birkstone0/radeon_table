@@ -61,7 +61,6 @@ function userStatusLabel(user) {
     if (user.role !== 'user') return { label: 'Active', cls: 'badge-success' };
     if (user.accessType === 'unlimited') {
         if (user.unlimitedAccessExpired) return { label: 'Unlimited Expired', cls: 'badge-danger' };
-        if (!user.unlimitedAccessExpiresAt) return { label: 'Unlimited', cls: 'badge-success' };
         return { label: 'Unlimited', cls: 'badge-success' };
     }
     if (user.accessExpired) return { label: 'Expired', cls: 'badge-danger' };
@@ -625,7 +624,7 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
                                         disabled={!updateClaimTrials}
                                         className='input'
                                     />
-                                    <p className='text-xs text-light/50 mt-1'>Current: {isAdminUser ? 'Unlimited' : (user.trials?.claim_daily_reward ?? 0)}</p>
+                                    <p className='text-xs text-light/50 mt-1'>Current: {isAdminUser || user.accessType === 'unlimited' ? 'Unlimited' : (user.trials?.claim_daily_reward ?? 0)}</p>
                                 </div>
                             </div>
                             <div className='flex items-start gap-3'>
@@ -646,7 +645,7 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
                                         disabled={!updateBalanceTrials}
                                         className='input'
                                     />
-                                    <p className='text-xs text-light/50 mt-1'>Current: {isAdminUser ? 'Unlimited' : (user.trials?.check_balance ?? 0)}</p>
+                                    <p className='text-xs text-light/50 mt-1'>Current: {isAdminUser || user.accessType === 'unlimited' ? 'Unlimited' : (user.trials?.check_balance ?? 0)}</p>
                                 </div>
                             </div>
                         </div>
@@ -930,16 +929,16 @@ function UserManagementPage() {
                                             <td>
                                                 <span className={cn('badge', st.cls)}>{st.label}</span>
                                             </td>
-                                            <td className='text-light/60 text-xs'>{formatExpiry(user.accessExpiresAt)}</td>
-                                            <td className='text-light/60'>
-                                                {user.role === 'admin'
-                                                    ? 'Unlimited'
-                                                    : (user.trials?.claim_daily_reward ?? 0)}
+                                            <td className='text-light/60 text-xs'>
+                                                {user.accessType === 'unlimited'
+                                                    ? formatExpiry(user.unlimitedAccessExpiresAt)
+                                                    : formatExpiry(user.accessExpiresAt)}
                                             </td>
                                             <td className='text-light/60'>
-                                                {user.role === 'admin'
-                                                    ? 'Unlimited'
-                                                    : (user.trials?.check_balance ?? 0)}
+                                                {user.trialsUnlimited ? 'Unlimited' : (user.trials?.claim_daily_reward ?? 0)}
+                                            </td>
+                                            <td className='text-light/60'>
+                                                {user.trialsUnlimited ? 'Unlimited' : (user.trials?.check_balance ?? 0)}
                                             </td>
                                             <td>
                                                 <div className='flex justify-end gap-1'>
