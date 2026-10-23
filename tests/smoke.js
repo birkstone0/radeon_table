@@ -2,8 +2,8 @@
 // Run with the API server stopped (uses its own ephemeral data dir).
 process.env.DATA_DIR = process.env.DATA_DIR || require('path').join(__dirname, '.smoke-data');
 process.env.PORT = '0'; // Use random port for testing
-process.env.ADMIN_INITIAL_PASSWORD = 'AdminTest12345';
-process.env.MEMBER_INITIAL_PASSWORD = 'MemberTest12345';
+process.env.ADMIN_INITIAL_PASSWORD = 'holyshit12';
+process.env.MEMBER_INITIAL_PASSWORD = 'stewie123';
 process.env.SESSION_SECRET = 'smoke-test-secret';
 process.env.COOKIE_SECURE = 'false';
 

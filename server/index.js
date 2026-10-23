@@ -30,6 +30,24 @@ async function createApp() {
     app.disable('x-powered-by');
     app.set('trust proxy', 1);
 
+    // CORS for cross-origin deployments (e.g., Netlify frontend + Render backend)
+    // Only configure CORS if CLIENT_ORIGIN is set
+    if (config.corsOrigin) {
+        app.use((req, res, next) => {
+            const origin = req.headers.origin;
+            if (origin === config.corsOrigin) {
+                res.setHeader('Access-Control-Allow-Origin', origin);
+                res.setHeader('Access-Control-Allow-Credentials', 'true');
+                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+            if (req.method === 'OPTIONS') {
+                return res.sendStatus(204);
+            }
+            next();
+        });
+    }
+
     // Simple request logger (no sensitive data)
     app.use((req, res, next) => {
         const start = Date.now();

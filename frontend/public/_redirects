@@ -1,0 +1,2 @@
+# Netlify SPA routing - all non-file requests go to index.html
+/* /index.html 200

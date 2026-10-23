@@ -22,6 +22,7 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
-        sourcemap: false
+        sourcemap: false,
+        copyPublicDir: true
     }
 });

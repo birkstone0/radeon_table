@@ -99,6 +99,12 @@ router.post('/users/:userId/access', async (req, res, next) => {
             auditMeta.maxAccountsPerBatch = value;
         }
 
+        // Security: Prevent role modification through this endpoint
+        // Role can only be set during user creation by an admin
+        if (req.body.role !== undefined) {
+            delete req.body.role;
+        }
+
         // --- Activation status ---
         // Allow admins to activate/deactivate the selected user from the Edit
         // Access modal. Revocation stays a separate, explicit action.

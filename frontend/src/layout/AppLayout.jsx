@@ -15,6 +15,7 @@ const inactiveClass = 'text-gray-400 hover:bg-green-900/20 hover:text-green-200'
 function AppLayout() {
     const auth = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [progress, setProgress] = useState(null);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

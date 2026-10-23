@@ -23,6 +23,8 @@ function readEnvFile(envPath) {
 
 readEnvFile(path.join(__dirname, '.env'));
 
+const corsOrigin = process.env.CLIENT_ORIGIN || process.env.CORS_ORIGIN || '';
+
 const config = {
     port: Number(process.env.PORT || 8787),
     isProduction,
@@ -32,12 +34,14 @@ const config = {
     // Session secret: random per start in dev when unset, required in production.
     sessionSecret: process.env.SESSION_SECRET,
     sessionMaxAgeMs: Number(process.env.SESSION_MAX_AGE_MS || 12 * 60 * 60 * 1000),
+    // Cookie security: Secure flag and SameSite policy
+    // For cross-origin deployments with credentialed requests, use 'none' with secure=true
     cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProduction,
-    cookieSameSite: process.env.COOKIE_SAMESITE || 'lax',
+    cookieSameSite: process.env.COOKIE_SAMESITE || (isProduction && corsOrigin ? 'none' : 'lax'),
     // Single-origin deployment: the Express server also serves the built React app.
     // CLIENT_ORIGIN is the accepted spelling for the frontend origin (CORS_ORIGIN is
     // kept as an alias for backwards compatibility).
-    corsOrigin: process.env.CLIENT_ORIGIN || process.env.CORS_ORIGIN || '',
+    corsOrigin,
     // Only used when the API and frontend are served from different origins.
     loginWindowMs: Number(process.env.LOGIN_WINDOW_MS || 15 * 60 * 1000),
     loginMaxAttempts: Number(process.env.LOGIN_MAX_ATTEMPTS || 10),
