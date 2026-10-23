@@ -1,28 +1,41 @@
 // Regression tests for large imports and unlimited access
 const assert = require('assert');
 
-function testLargeImportNoLimit() {
-    console.log('Testing large import with no 500-record limit...');
+function testLargeImportLimit() {
+    console.log('Testing large import with 1500-record limit...');
 
-    // Simulate import validation without 500-record limit
+    // Simulate import validation with 1500-record limit
     function validateImport(records) {
         if (!Array.isArray(records)) throw new Error('Invalid import payload');
         if (records.length === 0) throw new Error('No records to import');
-        // No 500-record limit check
+        if (records.length > 1500) throw new Error('Maximum 1500 records per import');
         return { valid: true, count: records.length };
     }
 
-    // Test with 1000 records (previously would fail)
-    const largeImport = Array.from({ length: 1000 }, (_, i) => ({
+    // Test with 1500 records (should pass)
+    const maxImport = Array.from({ length: 1500 }, (_, i) => ({
         phone: `0917${String(i).padStart(8, '0')}`,
         password: 'test123'
     }));
 
-    const result = validateImport(largeImport);
-    assert.strictEqual(result.valid, true, 'Large import should be valid');
-    assert.strictEqual(result.count, 1000, 'Should accept 1000 records');
+    const result1 = validateImport(maxImport);
+    assert.strictEqual(result1.valid, true, '1500 records should be valid');
+    assert.strictEqual(result1.count, 1500, 'Should accept 1500 records');
 
-    console.log('✓ Large import no limit test passed');
+    // Test with 1501 records (should fail)
+    const tooMany = Array.from({ length: 1501 }, (_, i) => ({
+        phone: `0917${String(i).padStart(8, '0')}`,
+        password: 'test123'
+    }));
+
+    try {
+        validateImport(tooMany);
+        assert.fail('Should reject 1501 records');
+    } catch (err) {
+        assert.ok(err.message.includes('Maximum 1500'), 'Should show correct error message');
+    }
+
+    console.log('✓ Large import limit test passed');
 }
 
 function testImportBatchProcessing() {
@@ -30,7 +43,7 @@ function testImportBatchProcessing() {
 
     // Simulate batch insertion with BATCH_SIZE = 100
     const BATCH_SIZE = 100;
-    const records = Array.from({ length: 500 }, (_, i) => ({
+    const records = Array.from({ length: 1500 }, (_, i) => ({
         phone: `0917${String(i).padStart(8, '0')}`,
         password: 'test123'
     }));
@@ -41,9 +54,9 @@ function testImportBatchProcessing() {
         batches.push(chunk);
     }
 
-    assert.strictEqual(batches.length, 5, 'Should have 5 batches for 500 records');
+    assert.strictEqual(batches.length, 15, 'Should have 15 batches for 1500 records');
     assert.strictEqual(batches[0].length, 100, 'First batch should have 100 records');
-    assert.strictEqual(batches[4].length, 100, 'Last batch should have 100 records');
+    assert.strictEqual(batches[14].length, 100, 'Last batch should have 100 records');
 
     console.log('✓ Import batch processing test passed');
 }
@@ -53,7 +66,7 @@ function testSelectionTokenBatchRetrieval() {
 
     // Simulate batch retrieval for large selections
     const BATCH_SIZE = 1000;
-    const totalRecords = 5000;
+    const totalRecords = 1500;
 
     const retrievedIds = [];
     let skip = 0;
@@ -70,9 +83,9 @@ function testSelectionTokenBatchRetrieval() {
         }
     }
 
-    assert.strictEqual(retrievedIds.length, 5000, 'Should retrieve all 5000 records');
+    assert.strictEqual(retrievedIds.length, 1500, 'Should retrieve all 1500 records');
     assert.strictEqual(retrievedIds[0], 0, 'First ID should be 0');
-    assert.strictEqual(retrievedIds[4999], 4999, 'Last ID should be 4999');
+    assert.strictEqual(retrievedIds[1499], 1499, 'Last ID should be 1499');
 
     console.log('✓ Selection token batch retrieval test passed');
 }
@@ -156,7 +169,7 @@ function testDurationPresets() {
 function testBatchLimitConfiguration() {
     console.log('Testing batch limit configuration...');
 
-    // Test that maxAccountsPerBatch can be set up to 10000
+    // Test that maxAccountsPerBatch can be set up to 10000, default is 1500
     function validateMaxAccounts(value) {
         if (!Number.isFinite(value) || value < 1 || value > 10000) {
             throw new Error('Max accounts per batch must be between 1 and 10000');
@@ -164,7 +177,7 @@ function testBatchLimitConfiguration() {
         return value;
     }
 
-    assert.strictEqual(validateMaxAccounts(50), 50, 'Should accept 50');
+    assert.strictEqual(validateMaxAccounts(1500), 1500, 'Should accept 1500 (default)');
     assert.strictEqual(validateMaxAccounts(1000), 1000, 'Should accept 1000');
     assert.strictEqual(validateMaxAccounts(10000), 10000, 'Should accept 10000');
 

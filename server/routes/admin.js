@@ -17,6 +17,7 @@ const { destroyUserSessions } = require('../middleware/auth');
 const accountsService = require('../services/accounts');
 const operations = require('../services/operations');
 const { maskPhone } = require('../lib/mask');
+const { MAX_CONFIGURABLE_BATCH_LIMIT, DEFAULT_MAX_ACCOUNTS_PER_BATCH } = require('../config/limits');
 
 const router = express.Router();
 
@@ -65,7 +66,9 @@ router.post('/users/:userId/access', async (req, res, next) => {
         const unlimitedDuration = req.body.unlimitedDuration;  // number(ms) or null for no expiration
         const unlimitedExtend = req.body.unlimitedExtend !== false;
         if (unlimitedDuration !== undefined && unlimitedDuration !== null) {
-            if (user.accessType !== 'unlimited') {
+            // Check if accessType is being set to unlimited in this request, or if it's already unlimited
+            const effectiveAccessType = updates.accessType !== undefined ? updates.accessType : user.accessType;
+            if (effectiveAccessType !== 'unlimited') {
                 throw badRequest('Cannot set unlimited duration for non-unlimited access type');
             }
             const ms = durationMsFor(unlimitedDuration);
@@ -88,7 +91,9 @@ router.post('/users/:userId/access', async (req, res, next) => {
         const duration = req.body.duration;           // '20m'|'1h'|'1d'|'7d'|'30d'| number(ms)
         const extend = req.body.extend !== false;     // default extends from current expiry
         if (duration !== undefined && duration !== null && duration !== '') {
-            if (user.accessType === 'unlimited') {
+            // Check if accessType is being set to limited in this request, or if it's already limited
+            const effectiveAccessType = updates.accessType !== undefined ? updates.accessType : user.accessType;
+            if (effectiveAccessType === 'unlimited') {
                 throw badRequest('Cannot set limited duration for unlimited access type');
             }
             const ms = durationMsFor(duration);
@@ -128,7 +133,7 @@ router.post('/users/:userId/access', async (req, res, next) => {
         // --- Max accounts per batch ---
         const maxAccountsPerBatch = req.body.maxAccountsPerBatch;
         if (maxAccountsPerBatch !== undefined && maxAccountsPerBatch !== null) {
-            const value = requireInteger(maxAccountsPerBatch, 'maxAccountsPerBatch', { min: 1, max: 10000 });
+            const value = requireInteger(maxAccountsPerBatch, 'maxAccountsPerBatch', { min: 1, max: MAX_CONFIGURABLE_BATCH_LIMIT });
             updates.maxAccountsPerBatch = value;
             auditMeta.maxAccountsPerBatch = value;
         }

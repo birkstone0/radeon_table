@@ -5,6 +5,7 @@ const operations = require('../services/operations');
 const accounts = require('../services/accounts');
 const { badRequest } = require('../lib/errors');
 const { parsePagination } = require('../lib/validate');
+const { MAX_BATCH_STATUS_OPERATIONS, SELECTION_BATCH_SIZE } = require('../config/limits');
 
 const router = express.Router();
 
@@ -58,7 +59,6 @@ router.post('/run', async (req, res, next) => {
             }
 
             // Batch retrieval for large selections to avoid memory issues
-            const BATCH_SIZE = 1000;
             const selectedAccountIds = [];
             let skip = 0;
             let hasMore = true;
@@ -67,14 +67,14 @@ router.post('/run', async (req, res, next) => {
                 const accounts = await Account.find(query)
                     .select('_id')
                     .skip(skip)
-                    .limit(BATCH_SIZE);
+                    .limit(SELECTION_BATCH_SIZE);
                 
                 if (accounts.length === 0) {
                     hasMore = false;
                 } else {
                     selectedAccountIds.push(...accounts.map(a => a._id.toString()));
-                    skip += BATCH_SIZE;
-                    hasMore = accounts.length === BATCH_SIZE;
+                    skip += SELECTION_BATCH_SIZE;
+                    hasMore = accounts.length === SELECTION_BATCH_SIZE;
                 }
             }
 
@@ -181,7 +181,7 @@ router.post('/batch-status', async (req, res, next) => {
     try {
         const operationIds = Array.isArray(req.body.operationIds) ? req.body.operationIds : [];
         if (operationIds.length === 0) throw badRequest('No operation ids provided');
-        if (operationIds.length > 500) throw badRequest('At most 500 operations per request');
+        if (operationIds.length > MAX_BATCH_STATUS_OPERATIONS) throw badRequest(`At most ${MAX_BATCH_STATUS_OPERATIONS} operations per request`);
 
         const operationsList = await operations.getBatchForOwner(req.user.id, operationIds);
         return res.json({

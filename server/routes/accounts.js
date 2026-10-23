@@ -14,6 +14,7 @@ const { requireString, requireEnum, optionalString, parsePagination } = require(
 const audit = require('../lib/audit');
 const { maskPhone } = require('../lib/mask');
 const logger = require('../lib/logger');
+const { MAX_IMPORT_RECORDS } = require('../config/limits');
 
 const router = express.Router();
 
@@ -92,6 +93,7 @@ router.post('/imports', async (req, res, next) => {
         const method = requireEnum(req.body.method, 'method', ['txt', 'shared_password']);
         const rawRecords = req.body.records;
         if (!Array.isArray(rawRecords) || rawRecords.length === 0) throw badRequest('Nothing to import');
+        if (rawRecords.length > MAX_IMPORT_RECORDS) throw badRequest(`Maximum ${MAX_IMPORT_RECORDS} records per import`);
 
         const records = rawRecords.map((record) => {
             const phone = normalizePhone(record && record.phone);

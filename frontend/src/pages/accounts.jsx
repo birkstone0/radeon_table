@@ -11,6 +11,7 @@ import { addToast } from '../lib/toast';
 import { cn } from '../styles/utils';
 import { openProgress, hasActiveOperation } from '../lib/operationProgress';
 import { useAuth } from '../state/auth';
+import { MAX_IMPORT_RECORDS, MAX_RECORDS_PER_OPERATION } from '../config/limits';
 
 // Client-side parse of "phone:password" lines. This keeps the exact line
 // numbering the backend preview uses so the confirmed records can be matched
@@ -250,6 +251,11 @@ function AccountsPage() {
                 if (!sharedPassword) throw new Error('A shared password is required');
                 payload.sharedPassword = sharedPassword;
             }
+            // Client-side validation for import limit
+            const lines = importText.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#'));
+            if (lines.length > MAX_IMPORT_RECORDS) {
+                throw new Error(`Maximum ${MAX_IMPORT_RECORDS} records per import. Found ${lines.length} records. Please split into multiple imports.`);
+            }
             const { data } = await accountsApi.previewImport(payload);
             setPreview(data);
         } catch (err) {
@@ -335,6 +341,11 @@ function AccountsPage() {
         if (!auth.isAdmin && auth.user && auth.user.accessExpired) {
             addToast('Account Access Expired. Contact an administrator.', 'error');
             setRunning(false);
+            return;
+        }
+        // Client-side validation for operation limit
+        if (selectedCount > MAX_RECORDS_PER_OPERATION) {
+            addToast(`Maximum ${MAX_RECORDS_PER_OPERATION} records per operation. Selected: ${selectedCount}. Please process in smaller batches.`, 'error');
             return;
         }
         setSelection('');

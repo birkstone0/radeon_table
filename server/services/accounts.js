@@ -8,6 +8,7 @@ const credentials = require('../lib/credentials');
 const audit = require('../lib/audit');
 const tableph = require('./tableph');
 const logger = require('../lib/logger');
+const { MAX_IMPORT_RECORDS, IMPORT_BATCH_SIZE } = require('../config/limits');
 
 async function findForOwner(ownerId, accountId) {
     return await Account.findOne({ _id: accountId, ownerId });
@@ -22,6 +23,7 @@ async function prepareImport({ ownerId, method, records }) {
     logger.info('ACCOUNTS', `Preparing import: ${records.length} records`);
     if (!Array.isArray(records)) throw badRequest('Invalid import payload');
     if (records.length === 0) throw badRequest('No records to import');
+    if (records.length > MAX_IMPORT_RECORDS) throw badRequest(`Maximum ${MAX_IMPORT_RECORDS} records per import`);
 
     const existing = new Set(
         (await Account.find({ ownerId }, { phone: 1 })).map((row) => row.phone)
@@ -78,11 +80,10 @@ async function commitImport({ ownerId, method, records }) {
     });
 
     // Batch insert for performance with large imports
-    const BATCH_SIZE = 100;
     const inserted = [];
     
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-        const chunk = records.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < records.length; i += IMPORT_BATCH_SIZE) {
+        const chunk = records.slice(i, i + IMPORT_BATCH_SIZE);
         const accountDocs = chunk.map((record) => ({
             ownerId,
             phone: record.phone,

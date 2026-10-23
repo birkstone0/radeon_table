@@ -7,6 +7,7 @@ import {
     UserPlus, Shield, Ban, RefreshCw, Search, CheckCircle2, XCircle, AlertTriangle,
     Pencil, KeyRound, Trash2, Clock
 } from 'lucide-react';
+import { MAX_CONFIGURABLE_BATCH_LIMIT, DEFAULT_MAX_ACCOUNTS_PER_BATCH } from '../config/limits';
 
 const DURATION_OPTIONS = [
     { value: '20m', label: '20 minutes' },
@@ -103,7 +104,7 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
     const [updateBalanceTrials, setUpdateBalanceTrials] = useState(false);
     const [balanceTrials, setBalanceTrials] = useState(user.trials?.check_balance ?? 0);
     const [updateMaxAccounts, setUpdateMaxAccounts] = useState(false);
-    const [maxAccounts, setMaxAccounts] = useState(user.maxAccountsPerBatch ?? 50);
+    const [maxAccounts, setMaxAccounts] = useState(user.maxAccountsPerBatch ?? DEFAULT_MAX_ACCOUNTS_PER_BATCH);
     const [status, setStatus] = useState(user.status || 'active');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -192,7 +193,7 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
                 payload.accessType = accessType;
             }
 
-            // Handle unlimited access duration
+            // Handle unlimited access duration (only for the new accessType being set)
             if (accessType === 'unlimited' && unlimitedDurationMode !== 'none') {
                 if (unlimitedDurationPreset === 'none') {
                     // No expiration
@@ -225,7 +226,7 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
                 }
             }
 
-            // Handle limited access duration (only for limited access type)
+            // Handle limited access duration (only for the new accessType being set)
             if (accessType === 'limited' && durationMode !== 'none') {
                 if (durationMode === 'days') {
                     const daysNum = Number(days);
@@ -262,8 +263,8 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
             // Only include max accounts if checkbox is selected
             if (updateMaxAccounts) {
                 const maxNum = Number(maxAccounts);
-                if (!Number.isFinite(maxNum) || maxNum < 1 || maxNum > 10000) {
-                    throw new Error('Max accounts per batch must be between 1 and 10000');
+                if (!Number.isFinite(maxNum) || maxNum < 1 || maxNum > MAX_CONFIGURABLE_BATCH_LIMIT) {
+                    throw new Error(`Max accounts per batch must be between 1 and ${MAX_CONFIGURABLE_BATCH_LIMIT}`);
                 }
                 payload.maxAccountsPerBatch = maxNum;
             }

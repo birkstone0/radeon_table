@@ -1,5 +1,6 @@
 // User model for MongoDB
 const mongoose = require('mongoose');
+const { DEFAULT_MAX_ACCOUNTS_PER_BATCH } = require('../config/limits');
 
 const userSchema = new mongoose.Schema({
     username: {
@@ -87,7 +88,7 @@ const userSchema = new mongoose.Schema({
     // Admin users are exempt from this limit (treated as unlimited).
     maxAccountsPerBatch: {
         type: Number,
-        default: 50,
+        default: DEFAULT_MAX_ACCOUNTS_PER_BATCH,
         max: 10000
     }
 }, {

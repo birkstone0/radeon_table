@@ -16,6 +16,7 @@ const { maskPhone } = require('../lib/mask');
 const audit = require('../lib/audit');
 const tableph = require('./tableph');
 const logger = require('../lib/logger');
+const { MAX_RECORDS_PER_OPERATION, DEFAULT_MAX_ACCOUNTS_PER_BATCH } = require('../config/limits');
 
 const ACTIVE_STATUSES = ['queued', 'processing', 'retrying'];
 
@@ -113,10 +114,15 @@ async function queueAccounts({ ownerId, operationType, accountIds }) {
     // Enforce per-user batch size limit (admins and unlimited access users are exempt)
     const isUnlimited = owner.role === 'admin' || (owner.accessType === 'unlimited');
     if (!isUnlimited) {
-        const maxAccounts = owner.maxAccountsPerBatch || 50;
+        const maxAccounts = owner.maxAccountsPerBatch || DEFAULT_MAX_ACCOUNTS_PER_BATCH;
         if (uniqueAccountIds.length > maxAccounts) {
             throw badRequest(`You can process at most ${maxAccounts} account${maxAccounts === 1 ? '' : 's'} per batch. Selected: ${uniqueAccountIds.length}. Contact an administrator to increase your limit or grant unlimited access.`);
         }
+    }
+
+    // Global hard limit for all users
+    if (uniqueAccountIds.length > MAX_RECORDS_PER_OPERATION) {
+        throw badRequest(`Maximum ${MAX_RECORDS_PER_OPERATION} records per operation. Selected: ${uniqueAccountIds.length}. Please process in smaller batches.`);
     }
 
     const access = users.accessBlockedFor(owner);
