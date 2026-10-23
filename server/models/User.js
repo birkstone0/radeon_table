@@ -87,7 +87,8 @@ const userSchema = new mongoose.Schema({
     // Admin users are exempt from this limit (treated as unlimited).
     maxAccountsPerBatch: {
         type: Number,
-        default: 50
+        default: 50,
+        max: 10000
     }
 }, {
     timestamps: true

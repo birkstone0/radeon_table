@@ -92,7 +92,6 @@ router.post('/imports', async (req, res, next) => {
         const method = requireEnum(req.body.method, 'method', ['txt', 'shared_password']);
         const rawRecords = req.body.records;
         if (!Array.isArray(rawRecords) || rawRecords.length === 0) throw badRequest('Nothing to import');
-        if (rawRecords.length > 500) throw badRequest('At most 500 records per import');
 
         const records = rawRecords.map((record) => {
             const phone = normalizePhone(record && record.phone);

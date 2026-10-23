@@ -90,11 +90,17 @@ export const operationsApi = {
 };
 
 export const selectionApi = {
+    createAccountsToken: (filters) => api.post('/selection/accounts', filters),
+    getAccountsIds: (token, params) => api.get(`/selection/accounts/${token}/ids`, { params }),
+    excludeAccountsIds: (token, ids) => api.post(`/selection/accounts/${token}/exclude`, { ids }),
+    clearAccountsToken: (token) => api.delete(`/selection/accounts/${token}`),
     createOperationsToken: (filters) => api.post('/selection/operations', filters),
     getOperationsIds: (token, params) => api.get(`/selection/operations/${token}/ids`, { params }),
     excludeOperationsIds: (token, ids) => api.post(`/selection/operations/${token}/exclude`, { ids }),
-    clearToken: (token) => api.delete(`/selection/operations/${token}`)
+    clearOperationsToken: (token) => api.delete(`/selection/operations/${token}`)
 };
+
+export const clearToken = (token) => api.delete(`/selection/operations/${token}`);
 
 export const adminApi = {
     overview: () => api.get('/admin/overview'),

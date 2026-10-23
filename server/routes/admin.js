@@ -128,7 +128,7 @@ router.post('/users/:userId/access', async (req, res, next) => {
         // --- Max accounts per batch ---
         const maxAccountsPerBatch = req.body.maxAccountsPerBatch;
         if (maxAccountsPerBatch !== undefined && maxAccountsPerBatch !== null) {
-            const value = requireInteger(maxAccountsPerBatch, 'maxAccountsPerBatch', { min: 1, max: 50 });
+            const value = requireInteger(maxAccountsPerBatch, 'maxAccountsPerBatch', { min: 1, max: 10000 });
             updates.maxAccountsPerBatch = value;
             auditMeta.maxAccountsPerBatch = value;
         }

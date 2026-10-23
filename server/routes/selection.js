@@ -10,6 +10,39 @@ const { parsePagination } = require('../lib/validate');
 
 const router = express.Router();
 
+// Create a selection token for accounts matching the given filters
+router.post('/accounts', async (req, res, next) => {
+    try {
+        const filters = {
+            search: typeof req.body.search === 'string' ? req.body.search : null,
+            status: typeof req.body.status === 'string' ? req.body.status : null
+        };
+
+        // Build the MongoDB query
+        const query = { ownerId: req.user.id };
+        if (filters.search) query.phone = { $regex: filters.search, $options: 'i' };
+        if (filters.status) query.status = filters.status;
+
+        // Count matching records
+        const count = await Account.countDocuments(query);
+
+        // Create selection token
+        const token = await SelectionToken.create({
+            ownerId: req.user.id,
+            resourceType: 'accounts',
+            filters,
+            estimatedCount: count
+        });
+
+        return res.json({
+            token: token._id,
+            count
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Create a selection token for operations matching the given filters
 router.post('/operations', async (req, res, next) => {
     try {
@@ -48,6 +81,44 @@ router.post('/operations', async (req, res, next) => {
         return res.json({
             token: token._id,
             count
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Get the actual list of account IDs matching a selection token
+// Supports pagination for large selections
+router.get('/accounts/:token/ids', async (req, res, next) => {
+    try {
+        const tokenId = req.params.token;
+        const { page, limit, offset } = parsePagination(req.query);
+
+        const token = await SelectionToken.findOne({ _id: tokenId, ownerId: req.user.id, resourceType: 'accounts' });
+        if (!token) throw notFound('Selection token not found or expired');
+
+        // Build query from stored filters
+        const query = { ownerId: req.user.id };
+        const filters = token.filters;
+        if (filters.search) query.phone = { $regex: filters.search, $options: 'i' };
+        if (filters.status) query.status = filters.status;
+
+        // Exclude manually deselected IDs
+        if (token.excludedIds && token.excludedIds.length > 0) {
+            query._id = { $nin: token.excludedIds };
+        }
+
+        const total = await Account.countDocuments(query);
+        const items = await Account.find(query)
+            .select('_id')
+            .skip(offset)
+            .limit(limit);
+
+        return res.json({
+            page,
+            limit,
+            total,
+            items: items.map(acc => acc._id)
         });
     } catch (error) {
         next(error);
@@ -100,6 +171,31 @@ router.get('/operations/:token/ids', async (req, res, next) => {
 });
 
 // Exclude specific IDs from a selection token (individual deselection)
+router.post('/accounts/:token/exclude', async (req, res, next) => {
+    try {
+        const tokenId = req.params.token;
+        const idsToExclude = Array.isArray(req.body.ids) ? req.body.ids : [];
+
+        if (idsToExclude.length === 0) throw badRequest('No IDs provided');
+
+        const token = await SelectionToken.findOne({ _id: tokenId, ownerId: req.user.id, resourceType: 'accounts' });
+        if (!token) throw notFound('Selection token not found or expired');
+
+        // Add to excluded IDs (avoid duplicates)
+        const updatedExcluded = [...new Set([...token.excludedIds, ...idsToExclude])];
+        token.excludedIds = updatedExcluded;
+        await token.save();
+
+        return res.json({
+            excludedCount: updatedExcluded.length,
+            remainingCount: token.estimatedCount - updatedExcluded.length
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Exclude specific IDs from a selection token (individual deselection)
 router.post('/operations/:token/exclude', async (req, res, next) => {
     try {
         const tokenId = req.params.token;
@@ -119,6 +215,18 @@ router.post('/operations/:token/exclude', async (req, res, next) => {
             excludedCount: updatedExcluded.length,
             remainingCount: token.estimatedCount - updatedExcluded.length
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Clear a selection token
+router.delete('/accounts/:token', async (req, res, next) => {
+    try {
+        const tokenId = req.params.token;
+        const result = await SelectionToken.deleteOne({ _id: tokenId, ownerId: req.user.id });
+        if (result.deletedCount === 0) throw notFound('Selection token not found');
+        return res.json({ message: 'Selection cleared' });
     } catch (error) {
         next(error);
     }

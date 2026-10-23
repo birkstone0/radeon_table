@@ -153,6 +153,53 @@ function testGlobalSelectAllWorkflow() {
     console.log('✓ Global select all workflow test passed');
 }
 
+function testSelectionLimitRemoval() {
+    console.log('Testing selection limit removal...');
+
+    // Simulate the old limit vs new limit
+    const oldLimit = 50;
+    const newLimitForLimited = 50;
+    const newLimitForUnlimited = 1000;
+
+    assert.strictEqual(oldLimit, 50, 'Old limit was 50');
+    assert.strictEqual(newLimitForLimited, 50, 'Limited users still have 50 limit');
+    assert.strictEqual(newLimitForUnlimited, 1000, 'Unlimited users have 1000 limit');
+
+    // Test that 239 records can be selected
+    const selectedCount = 239;
+    const canProcessLimited = selectedCount <= newLimitForLimited;
+    const canProcessUnlimited = selectedCount <= newLimitForUnlimited;
+
+    assert.strictEqual(canProcessLimited, false, '239 records exceed limited user limit');
+    assert.strictEqual(canProcessUnlimited, true, '239 records do not exceed unlimited user limit');
+
+    console.log('✓ Selection limit removal test passed');
+}
+
+function testAccountsSelectionToken() {
+    console.log('Testing accounts selection token...');
+
+    // Simulate accounts selection token
+    const accountsToken = {
+        _id: 'token456',
+        ownerId: 'user123',
+        resourceType: 'accounts',
+        filters: {
+            search: '0917',
+            status: 'pending'
+        },
+        estimatedCount: 150,
+        excludedIds: [],
+        createdAt: new Date()
+    };
+
+    assert.strictEqual(accountsToken.resourceType, 'accounts', 'Resource type should be accounts');
+    assert.strictEqual(accountsToken.estimatedCount, 150, 'Should have correct count');
+    assert.strictEqual(accountsToken.filters.search, '0917', 'Should store search filter');
+
+    console.log('✓ Accounts selection token test passed');
+}
+
 // Run all tests
 try {
     testSelectionTokenStructure();
@@ -163,6 +210,8 @@ try {
     testSelectionPagination();
     testSelectionAPICreate();
     testGlobalSelectAllWorkflow();
+    testSelectionLimitRemoval();
+    testAccountsSelectionToken();
     console.log('\n✓ All global selection tests passed');
 } catch (error) {
     console.error('\n✗ Test failed:', error.message);

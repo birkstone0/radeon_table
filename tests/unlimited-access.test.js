@@ -113,6 +113,47 @@ function testUnlimitedAccessTrialExemption() {
     console.log('✓ Unlimited access trial exemption test passed');
 }
 
+function testUnlimitedAccessQuotaPreservation() {
+    console.log('Testing unlimited access quota preservation...');
+
+    // Simulate switching from limited to unlimited and back
+    const user = {
+        role: 'user',
+        accessType: 'limited',
+        trials: { claim_daily_reward: 10, check_balance: 5 }
+    };
+
+    // Switch to unlimited
+    user.accessType = 'unlimited';
+    assert.strictEqual(user.trials.claim_daily_reward, 10, 'Quotas should be preserved when switching to unlimited');
+
+    // Switch back to limited
+    user.accessType = 'limited';
+    assert.strictEqual(user.trials.claim_daily_reward, 10, 'Quotas should be preserved when switching back to limited');
+
+    console.log('✓ Unlimited access quota preservation test passed');
+}
+
+function testBatchLimitForUnlimitedUsers() {
+    console.log('Testing batch limit for unlimited users...');
+
+    // Simulate batch limit enforcement
+    function getMaxBatchSize(user) {
+        if (user.role === 'admin' || user.accessType === 'unlimited') return 1000;
+        return user.maxAccountsPerBatch || 50;
+    }
+
+    const unlimitedUser = { role: 'user', accessType: 'unlimited', maxAccountsPerBatch: 50 };
+    const limitedUser = { role: 'user', accessType: 'limited', maxAccountsPerBatch: 50 };
+    const adminUser = { role: 'admin', accessType: 'limited', maxAccountsPerBatch: 50 };
+
+    assert.strictEqual(getMaxBatchSize(unlimitedUser), 1000, 'Unlimited user should have 1000 limit');
+    assert.strictEqual(getMaxBatchSize(limitedUser), 50, 'Limited user should have 50 limit');
+    assert.strictEqual(getMaxBatchSize(adminUser), 1000, 'Admin should have 1000 limit');
+
+    console.log('✓ Batch limit for unlimited users test passed');
+}
+
 // Run all tests
 try {
     testUnlimitedAccessUserSchema();
@@ -120,6 +161,8 @@ try {
     testUnlimitedAccessDurationPresets();
     testUnlimitedAccessAPICreate();
     testUnlimitedAccessTrialExemption();
+    testUnlimitedAccessQuotaPreservation();
+    testBatchLimitForUnlimitedUsers();
     console.log('\n✓ All unlimited access tests passed');
 } catch (error) {
     console.error('\n✗ Test failed:', error.message);

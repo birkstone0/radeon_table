@@ -262,8 +262,8 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
             // Only include max accounts if checkbox is selected
             if (updateMaxAccounts) {
                 const maxNum = Number(maxAccounts);
-                if (!Number.isFinite(maxNum) || maxNum < 1 || maxNum > 50) {
-                    throw new Error('Max accounts per batch must be between 1 and 50');
+                if (!Number.isFinite(maxNum) || maxNum < 1 || maxNum > 10000) {
+                    throw new Error('Max accounts per batch must be between 1 and 10000');
                 }
                 payload.maxAccountsPerBatch = maxNum;
             }

@@ -108,18 +108,16 @@ async function queueAccounts({ ownerId, operationType, accountIds }) {
     const owner = await User.findById(ownerId);
     if (!owner) throw forbidden('Account not found or not owned by you');
 
-    logger.info('OPS', `User: ${owner.username}, role: ${owner.role}, trials: ${JSON.stringify(owner.trials)}`);
+    logger.info('OPS', `User: ${owner.username}, role: ${owner.role}, accessType: ${owner.accessType || 'limited'}, trials: ${JSON.stringify(owner.trials)}`);
 
-    // Enforce per-user batch size limit (admins are exempt)
-    if (owner.role !== 'admin') {
+    // Enforce per-user batch size limit (admins and unlimited access users are exempt)
+    const isUnlimited = owner.role === 'admin' || (owner.accessType === 'unlimited');
+    if (!isUnlimited) {
         const maxAccounts = owner.maxAccountsPerBatch || 50;
         if (uniqueAccountIds.length > maxAccounts) {
-            throw badRequest(`You can process at most ${maxAccounts} account${maxAccounts === 1 ? '' : 's'} per batch. Selected: ${uniqueAccountIds.length}`);
+            throw badRequest(`You can process at most ${maxAccounts} account${maxAccounts === 1 ? '' : 's'} per batch. Selected: ${uniqueAccountIds.length}. Contact an administrator to increase your limit or grant unlimited access.`);
         }
     }
-
-    // Global hard limit (safety net)
-    if (uniqueAccountIds.length > 50) throw badRequest('Select at most 50 accounts per run');
 
     const access = users.accessBlockedFor(owner);
     if (access.blocked) {

@@ -29,14 +29,69 @@ router.post('/run', async (req, res, next) => {
         if (!['claim_daily_reward', 'check_balance'].includes(operationType)) {
             throw badRequest('Unsupported operation type');
         }
-        const accountIds = Array.isArray(req.body.accountIds) ? req.body.accountIds : [];
-        if (accountIds.length === 0) throw badRequest('Select at least one account');
 
-        const result = await operations.queueAccounts({
-            ownerId: req.user.id,
-            operationType,
-            accountIds
-        });
+        // Support both direct account IDs and selection tokens
+        const accountIds = Array.isArray(req.body.accountIds) ? req.body.accountIds : [];
+        const selectionToken = req.body.selectionToken || null;
+
+        if (accountIds.length === 0 && !selectionToken) throw badRequest('Select at least one account');
+
+        let result;
+        if (selectionToken) {
+            // Use selection token to get all matching account IDs
+            const SelectionToken = require('../models/SelectionToken');
+            const Account = require('../models/Account');
+            const Operation = require('../models/Operation');
+
+            const token = await SelectionToken.findOne({ _id: selectionToken, ownerId: req.user.id, resourceType: 'accounts' });
+            if (!token) throw badRequest('Invalid or expired selection token');
+
+            // Build query from stored filters
+            const query = { ownerId: req.user.id };
+            const filters = token.filters;
+            if (filters.search) query.phone = { $regex: filters.search, $options: 'i' };
+            if (filters.status) query.status = filters.status;
+
+            // Exclude manually deselected IDs
+            if (token.excludedIds && token.excludedIds.length > 0) {
+                query._id = { $nin: token.excludedIds };
+            }
+
+            // Batch retrieval for large selections to avoid memory issues
+            const BATCH_SIZE = 1000;
+            const selectedAccountIds = [];
+            let skip = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const accounts = await Account.find(query)
+                    .select('_id')
+                    .skip(skip)
+                    .limit(BATCH_SIZE);
+                
+                if (accounts.length === 0) {
+                    hasMore = false;
+                } else {
+                    selectedAccountIds.push(...accounts.map(a => a._id.toString()));
+                    skip += BATCH_SIZE;
+                    hasMore = accounts.length === BATCH_SIZE;
+                }
+            }
+
+            if (selectedAccountIds.length === 0) throw badRequest('No accounts match the selection criteria');
+
+            result = await operations.queueAccounts({
+                ownerId: req.user.id,
+                operationType,
+                accountIds: selectedAccountIds
+            });
+        } else {
+            result = await operations.queueAccounts({
+                ownerId: req.user.id,
+                operationType,
+                accountIds
+            });
+        }
 
         return res.json({
             message: `Queued ${result.queued.length} account${result.queued.length === 1 ? '' : 's'}. Processing is running in the background.`,
@@ -126,7 +181,7 @@ router.post('/batch-status', async (req, res, next) => {
     try {
         const operationIds = Array.isArray(req.body.operationIds) ? req.body.operationIds : [];
         if (operationIds.length === 0) throw badRequest('No operation ids provided');
-        if (operationIds.length > 50) throw badRequest('At most 50 operations per request');
+        if (operationIds.length > 500) throw badRequest('At most 500 operations per request');
 
         const operationsList = await operations.getBatchForOwner(req.user.id, operationIds);
         return res.json({

@@ -5,8 +5,8 @@
 // carries masked numbers, and confirming an import sends only the phone plus the
 // password the user just supplied in the browser.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, FileText, Phone, Trash2, Play, Search, Eye, EyeOff, AlertTriangle, X } from 'lucide-react';
-import { accountsApi, operationsApi } from '../lib/api';
+import { Upload, FileText, Phone, Trash2, Play, Search, Eye, EyeOff, AlertTriangle, X, CheckSquare, Square, XCircle } from 'lucide-react';
+import { accountsApi, operationsApi, selectionApi } from '../lib/api';
 import { addToast } from '../lib/toast';
 import { cn } from '../styles/utils';
 import { openProgress, hasActiveOperation } from '../lib/operationProgress';
@@ -75,6 +75,11 @@ function AccountsPage() {
     const [dropActive, setDropActive] = useState(false);
     const [file, setFile] = useState(null);
 
+    // Global selection state
+    const [selectionToken, setSelectionToken] = useState(null);
+    const [selectedCount, setSelectedCount] = useState(0);
+    const [selectAllMode, setSelectAllMode] = useState('none'); // 'none' | 'page' | 'all'
+
     // Import wizard state
     const [importMethod, setImportMethod] = useState(''); // '', 'txt', 'shared_password'
     const [showImport, setShowImport] = useState(false);
@@ -119,13 +124,72 @@ function AccountsPage() {
 
     const visibleIds = useMemo(() => accounts.map((account) => account.id), [accounts]);
 
-    const toggleSelect = (id) => {
-        setSelectedIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+    // Global selection functions
+    const selectAllPage = () => {
+        const pageIds = accounts.map(acc => acc.id);
+        setSelectedIds(pageIds);
+        setSelectAllMode('page');
+        setSelectedCount(pageIds.length);
     };
 
-    const selectAllVisible = () => {
-        setSelectedIds((current) => (current.length === visibleIds.length ? [] : visibleIds));
+    const selectAllRecords = async () => {
+        try {
+            const filters = {
+                search: search || null,
+                status: statusFilter || null
+            };
+            const { data } = await selectionApi.createAccountsToken(filters);
+            setSelectionToken(data.token);
+            setSelectedCount(data.count);
+            setSelectAllMode('all');
+            setSelectedIds([]);
+            addToast(`Selected all ${data.count} records matching current filters`, 'success');
+        } catch (err) {
+            addToast(err.message || 'Failed to select all records', 'error');
+        }
     };
+
+    const clearSelection = async () => {
+        if (selectionToken) {
+            try {
+                await selectionApi.clearAccountsToken(selectionToken);
+            } catch (err) {
+                // Ignore error on clear
+            }
+        }
+        setSelectionToken(null);
+        setSelectedCount(0);
+        setSelectAllMode('none');
+        setSelectedIds([]);
+    };
+
+    const toggleSelect = (id) => {
+        if (selectAllMode === 'all') {
+            // In global select mode, deselect means exclude from selection
+            if (selectionToken) {
+                selectionApi.excludeAccountsIds(selectionToken, [id]).then(({ data }) => {
+                    setSelectedCount(data.remainingCount);
+                }).catch(err => {
+                    addToast(err.message || 'Failed to update selection', 'error');
+                });
+            }
+        } else {
+            // Page selection mode
+            setSelectedIds(current => {
+                if (current.includes(id)) {
+                    return current.filter(value => value !== id);
+                } else {
+                    return [...current, id];
+                }
+            });
+            setSelectedCount(selectedIds.includes(id) ? selectedIds.length - 1 : selectedIds.length + 1);
+        }
+    };
+
+    // Clear selection when filters change
+    useEffect(() => {
+        clearSelection();
+    }, [search, statusFilter]);
 
     const applyFilter = (event) => {
         event.preventDefault();
@@ -257,7 +321,7 @@ function AccountsPage() {
     };
 
     const runOperation = async (operationType) => {
-        if (selectedIds.length === 0) return;
+        if (selectedCount === 0) return;
         if (running) {
             addToast('An operation is already in progress', 'error');
             return;
@@ -277,14 +341,23 @@ function AccountsPage() {
         setError('');
         setRunning(true);
         try {
-            const { data } = await operationsApi.run({ operationType, accountIds: selectedIds });
+            let payload;
+            if (selectAllMode === 'all' && selectionToken) {
+                // Use selection token for global selection
+                payload = { operationType, selectionToken };
+            } else {
+                // Use direct account IDs for page selection
+                payload = { operationType, accountIds: selectedIds };
+            }
+
+            const { data } = await operationsApi.run(payload);
             if (!data.operationIds || data.operationIds.length === 0) {
                 addToast('No operations were queued. Check your trials and account status.', 'error');
                 setRunning(false);
                 return;
             }
             openProgress(data.operationIds, operationType);
-            setSelectedIds([]);
+            clearSelection();
             setRunning(false);
         } catch (err) {
             setError(err.message || 'Could not start the operation');
@@ -348,17 +421,55 @@ function AccountsPage() {
 
             <div className='divider' />
 
+            {/* Selection controls */}
+            {total > 0 && (
+                <div className='flex flex-wrap items-center gap-2 mb-4 p-3 bg-light/5 rounded-lg'>
+                    <span className='text-sm text-light/80'>
+                        {selectedCount > 0 ? `${selectedCount} of ${total} selected` : `${total} records`}
+                    </span>
+                    <div className='flex gap-2 ml-auto'>
+                        {selectAllMode === 'none' && (
+                            <>
+                                <button
+                                    type='button'
+                                    onClick={selectAllPage}
+                                    className='btn btn-ghost text-xs'
+                                >
+                                    <CheckSquare className='w-4 h-4 mr-1' /> Select page
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={selectAllRecords}
+                                    className='btn btn-ghost text-xs'
+                                >
+                                    <CheckSquare className='w-4 h-4 mr-1' /> Select all records
+                                </button>
+                            </>
+                        )}
+                        {selectedCount > 0 && (
+                            <button
+                                type='button'
+                                onClick={clearSelection}
+                                className='btn btn-ghost text-xs text-red-400 hover:text-red-300'
+                            >
+                                <XCircle className='w-4 h-4 mr-1' /> Clear selection
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Bulk actions */}
             <div className='card flex flex-wrap items-center justify-between gap-3 p-3'>
                 <div className='flex items-center gap-3 text-xs text-light/60'>
-                    <span>{selectedIds.length} selected</span>
+                    <span>{selectedCount} selected</span>
                     <span className='hidden sm:inline'>of {total} record{total === 1 ? '' : 's'}</span>
                 </div>
                 <div className='flex items-center gap-2'>
-                    <button className='btn-ghost whitespace-nowrap' disabled={selectedIds.length === 0 || running} onClick={() => runOperation('claim_daily_reward')}>
+                    <button className='btn-ghost whitespace-nowrap' disabled={selectedCount === 0 || running} onClick={() => runOperation('claim_daily_reward')}>
                         <Play className='h-3.5 w-3.5' /> Login &amp; claim
                     </button>
-                    <button className='btn-ghost whitespace-nowrap' disabled={selectedIds.length === 0 || running} onClick={() => runOperation('check_balance')}>
+                    <button className='btn-ghost whitespace-nowrap' disabled={selectedCount === 0 || running} onClick={() => runOperation('check_balance')}>
                         <Play className='h-3.5 w-3.5' /> Login &amp; check balance
                     </button>
                 </div>
@@ -374,14 +485,16 @@ function AccountsPage() {
                     <table className='table'>
                         <thead>
                             <tr>
-                                <th className='w-8'>
-                                    <input
-                                        type='checkbox'
-                                        aria-label='Select all visible accounts'
-                                        className='accent-accent'
-                                        checked={visibleIds.length > 0 && selectedIds.length === visibleIds.length}
-                                        onChange={selectAllVisible}
-                                    />
+                                <th className='w-10'>
+                                    {selectAllMode === 'page' && selectedIds.length === accounts.length ? (
+                                        <button onClick={clearSelection} className='text-accent hover:text-accent/80'>
+                                            <CheckSquare className='w-4 h-4' />
+                                        </button>
+                                    ) : (
+                                        <button onClick={selectAllPage} className='text-light/60 hover:text-light'>
+                                            <Square className='w-4 h-4' />
+                                        </button>
+                                    )}
                                 </th>
                                 <th>Phone</th>
                                 <th>Validation</th>
@@ -407,16 +520,21 @@ function AccountsPage() {
                                     </td>
                                 </tr>
                             )}
-                            {!loading && accounts.map((account) => (
-                                <tr key={account.id}>
+                            {!loading && accounts.map((account) => {
+                                const isSelected = selectAllMode === 'all' ? true : selectedIds.includes(account.id);
+                                return (
+                                <tr key={account.id} className={isSelected ? 'bg-accent/10' : ''}>
                                     <td>
-                                        <input
-                                            type='checkbox'
-                                            aria-label={`Select ${account.phoneMasked}`}
-                                            className='accent-accent'
-                                            checked={selectedIds.includes(account.id)}
-                                            onChange={() => toggleSelect(account.id)}
-                                        />
+                                        <button
+                                            onClick={() => toggleSelect(account.id)}
+                                            className='text-light/60 hover:text-accent'
+                                        >
+                                            {isSelected ? (
+                                                <CheckSquare className='w-4 h-4 text-accent' />
+                                            ) : (
+                                                <Square className='w-4 h-4' />
+                                            )}
+                                        </button>
                                     </td>
                                     <td className='font-mono text-light'>{account.phoneMasked}</td>
                                     <td>
@@ -435,7 +553,8 @@ function AccountsPage() {
                                         </button>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

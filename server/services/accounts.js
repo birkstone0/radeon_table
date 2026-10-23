@@ -22,7 +22,6 @@ async function prepareImport({ ownerId, method, records }) {
     logger.info('ACCOUNTS', `Preparing import: ${records.length} records`);
     if (!Array.isArray(records)) throw badRequest('Invalid import payload');
     if (records.length === 0) throw badRequest('No records to import');
-    if (records.length > 500) throw badRequest('At most 500 records per import');
 
     const existing = new Set(
         (await Account.find({ ownerId }, { phone: 1 })).map((row) => row.phone)
@@ -78,20 +77,25 @@ async function commitImport({ ownerId, method, records }) {
         duplicates: 0
     });
 
+    // Batch insert for performance with large imports
+    const BATCH_SIZE = 100;
     const inserted = [];
-    for (const record of records) {
-        const credRef = credentials.create(ownerId, record.phone, record.password);
-        const account = await Account.create({
+    
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+        const chunk = records.slice(i, i + BATCH_SIZE);
+        const accountDocs = chunk.map((record) => ({
             ownerId,
             phone: record.phone,
             phoneMasked: maskPhone(record.phone),
-            credRef,
+            credRef: credentials.create(ownerId, record.phone, record.password),
             source: method,
             importBatchId: batch._id,
             validationStatus: 'valid',
             processingStatus: 'pending'
-        });
-        inserted.push({ id: account._id, phoneMasked: maskPhone(record.phone) });
+        }));
+        
+        const result = await Account.insertMany(accountDocs);
+        inserted.push(...result.map((account) => ({ id: account._id, phoneMasked: account.phoneMasked })));
     }
 
     await audit.record({

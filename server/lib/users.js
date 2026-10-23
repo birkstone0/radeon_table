@@ -127,10 +127,10 @@ function publicUser(user) {
     };
 }
 
-// The trial budget for a user. Regular users get a fixed allowance; admins are
-// never charged and are exempt from access-expiry blocks.
+// The trial budget for a user. Regular users get a fixed allowance; admins and
+// unlimited access users are never charged and are exempt from access-expiry blocks.
 function trialQuotaFor(user, operationType) {
-    const unlimited = user.role === 'admin' || user.status === 'revoked';
+    const unlimited = user.role === 'admin' || user.status === 'revoked' || (user.accessType === 'unlimited');
     if (unlimited) return { remaining: null, limit: null, unlimited: true };
     const trials = user.trials || {};
     const remaining = typeof trials[operationType] === 'number' ? Math.max(trials[operationType], 0) : 0;
@@ -151,6 +151,7 @@ function accessBlockedFor(user) {
         if (user.unlimitedAccessExpiresAt && new Date(user.unlimitedAccessExpiresAt).getTime() < now) {
             return { blocked: true, reason: 'Unlimited access expired' };
         }
+        // Unlimited access with no expiration is valid
         return { blocked: false };
     }
 
