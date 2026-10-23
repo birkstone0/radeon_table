@@ -1,0 +1,22 @@
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+data/
+
+# Environment files (never commit real secrets)
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/
+.idea/

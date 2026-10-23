@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+    min-height: 100%;
+}
+
+body {
+    margin: 0;
+    background-color: #191a19;
+    color: #e8efe2;
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #2d302d;
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3a3e3a;
+}
+
+@layer components {
+    .tp-panel {
+        @apply border border-white/10 bg-white/[0.02];
+    }
+
+    .tp-divider {
+        @apply border-t border-white/10;
+    }
+
+    .tp-label {
+        @apply block text-[11px] uppercase tracking-[0.14em] text-white/50;
+    }
+
+    .tp-input {
+        @apply w-full rounded-md border border-white/10 bg-[#161716] px-3 py-2 text-sm text-white/90
+        placeholder:text-white/30 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/40;
+    }
+
+    .tp-btn {
+        @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px]
+        font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .tp-btn-primary {
+        @apply tp-btn border border-accent/70 bg-primary text-white hover:bg-accent/90;
+    }
+
+    .tp-btn-ghost {
+        @apply tp-btn border border-white/15 bg-transparent text-white/80 hover:border-white/30 hover:text-white;
+    }
+
+    .tp-btn-danger {
+        @apply tp-btn border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20;
+    }
+
+    .tp-badge {
+        @apply inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide;
+    }
+}
