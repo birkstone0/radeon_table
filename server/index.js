@@ -18,6 +18,7 @@ const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/accounts');
 const operationRoutes = require('./routes/operations');
 const adminRoutes = require('./routes/admin');
+const selectionRoutes = require('./routes/selection');
 
 async function createApp() {
     // Connect to MongoDB
@@ -77,6 +78,7 @@ async function createApp() {
     app.use('/api/auth', authRoutes);
     app.use('/api/accounts', require('./middleware/auth').requireAuth, accountRoutes);
     app.use('/api/operations', require('./middleware/auth').requireAuth, operationRoutes);
+    app.use('/api/selection', require('./middleware/auth').requireAuth, selectionRoutes);
     app.use('/api/admin', require('./middleware/auth').requireAuth, require('./middleware/auth').requireAdmin, adminRoutes);
 
     app.get('/api/health', (req, res) => res.json({ ok: true, env: config.nodeEnv }));

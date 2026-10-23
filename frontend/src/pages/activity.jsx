@@ -2,11 +2,11 @@
 // with filtering and status indicators, and lets users re-open a completed
 // operation's progress panel from the module-level progress store.
 import React, { useCallback, useEffect, useState } from 'react';
-import { operationsApi } from '../lib/api';
+import { operationsApi, selectionApi } from '../lib/api';
 import { addToast } from '../lib/toast';
 import { cn, getOperationStatusColor } from '../styles/utils';
 import { openProgress } from '../lib/operationProgress';
-import { CheckCircle2, AlertTriangle, Clock, Search, RefreshCw, Eye, Trash2, X, Ban } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, Search, RefreshCw, Eye, Trash2, X, Ban, CheckSquare, Square, XCircle } from 'lucide-react';
 
 function ActivityPage() {
     const [operations, setOperations] = useState([]);
@@ -23,6 +23,12 @@ function ActivityPage() {
     // Clear Activity confirmation + in-flight guard
     const [confirmingClear, setConfirmingClear] = useState(false);
     const [clearing, setClearing] = useState(false);
+
+    // Global selection state
+    const [selectionToken, setSelectionToken] = useState(null);
+    const [selectedCount, setSelectedCount] = useState(0);
+    const [selectAllMode, setSelectAllMode] = useState(false); // 'none' | 'page' | 'all'
+    const [selectedIds, setSelectedIds] = useState([]);
 
     const loadOperations = useCallback(
         async (overrides = {}) => {
@@ -96,6 +102,74 @@ function ActivityPage() {
         }
     };
 
+    // Global selection functions
+    const selectAllPage = () => {
+        const pageIds = operations.map(op => op.id);
+        setSelectedIds(pageIds);
+        setSelectAllMode('page');
+        setSelectedCount(pageIds.length);
+    };
+
+    const selectAllRecords = async () => {
+        try {
+            const filters = {
+                operationType: operationTypeFilter || null,
+                status: statusFilter || null,
+                phone: search || null
+            };
+            const { data } = await selectionApi.createOperationsToken(filters);
+            setSelectionToken(data.token);
+            setSelectedCount(data.count);
+            setSelectAllMode('all');
+            setSelectedIds([]);
+            addToast(`Selected all ${data.count} records matching current filters`, 'success');
+        } catch (err) {
+            addToast(err.message || 'Failed to select all records', 'error');
+        }
+    };
+
+    const clearSelection = async () => {
+        if (selectionToken) {
+            try {
+                await selectionApi.clearToken(selectionToken);
+            } catch (err) {
+                // Ignore error on clear
+            }
+        }
+        setSelectionToken(null);
+        setSelectedCount(0);
+        setSelectAllMode('none');
+        setSelectedIds([]);
+    };
+
+    const toggleSelect = (id) => {
+        if (selectAllMode === 'all') {
+            // In global select mode, deselect means exclude from selection
+            if (selectionToken) {
+                selectionApi.excludeOperationsIds(selectionToken, [id]).then(({ data }) => {
+                    setSelectedCount(data.remainingCount);
+                }).catch(err => {
+                    addToast(err.message || 'Failed to update selection', 'error');
+                });
+            }
+        } else {
+            // Page selection mode
+            setSelectedIds(current => {
+                if (current.includes(id)) {
+                    return current.filter(value => value !== id);
+                } else {
+                    return [...current, id];
+                }
+            });
+            setSelectedCount(selectedIds.includes(id) ? selectedIds.length - 1 : selectedIds.length + 1);
+        }
+    };
+
+    // Clear selection when filters change
+    useEffect(() => {
+        clearSelection();
+    }, [search, statusFilter, operationTypeFilter]);
+
     function formatDate(value) {
         if (!value) return '—';
         const date = new Date(value);
@@ -168,6 +242,44 @@ function ActivityPage() {
                 </button>
             </form>
 
+            {/* Selection controls */}
+            {total > 0 && (
+                <div className='flex flex-wrap items-center gap-2 mb-4 p-3 bg-light/5 rounded-lg'>
+                    <span className='text-sm text-light/80'>
+                        {selectedCount > 0 ? `${selectedCount} of ${total} selected` : `${total} records`}
+                    </span>
+                    <div className='flex gap-2 ml-auto'>
+                        {selectAllMode === 'none' && (
+                            <>
+                                <button
+                                    type='button'
+                                    onClick={selectAllPage}
+                                    className='btn btn-ghost text-xs'
+                                >
+                                    <CheckSquare className='w-4 h-4 mr-1' /> Select page
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={selectAllRecords}
+                                    className='btn btn-ghost text-xs'
+                                >
+                                    <CheckSquare className='w-4 h-4 mr-1' /> Select all records
+                                </button>
+                            </>
+                        )}
+                        {selectedCount > 0 && (
+                            <button
+                                type='button'
+                                onClick={clearSelection}
+                                className='btn btn-ghost text-xs text-red-400 hover:text-red-300'
+                            >
+                                <XCircle className='w-4 h-4 mr-1' /> Clear selection
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {loading ? (
                 <div className='flex items-center justify-center py-12'>
                     <RefreshCw className='w-6 h-6 text-light/40 animate-spin' />
@@ -182,6 +294,17 @@ function ActivityPage() {
                         <table className='table'>
                             <thead>
                                 <tr>
+                                    <th className='w-10'>
+                                        {selectAllMode === 'page' && selectedIds.length === operations.length ? (
+                                            <button onClick={clearSelection} className='text-accent hover:text-accent/80'>
+                                                <CheckSquare className='w-4 h-4' />
+                                            </button>
+                                        ) : (
+                                            <button onClick={selectAllPage} className='text-light/60 hover:text-light'>
+                                                <Square className='w-4 h-4' />
+                                            </button>
+                                        )}
+                                    </th>
                                     <th>Phone</th>
                                     <th>Operation</th>
                                     <th>Status</th>
@@ -192,9 +315,23 @@ function ActivityPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {operations.map((op) => (
-                                    <tr key={op.id}>
-                                        <td className='font-mono text-xs'>{op.phoneMasked || '—'}</td>
+                                {operations.map((op) => {
+                                    const isSelected = selectAllMode === 'all' ? true : selectedIds.includes(op.id);
+                                    return (
+                                        <tr key={op.id} className={isSelected ? 'bg-accent/10' : ''}>
+                                            <td>
+                                                <button
+                                                    onClick={() => toggleSelect(op.id)}
+                                                    className='text-light/60 hover:text-accent'
+                                                >
+                                                    {isSelected ? (
+                                                        <CheckSquare className='w-4 h-4 text-accent' />
+                                                    ) : (
+                                                        <Square className='w-4 h-4' />
+                                                    )}
+                                                </button>
+                                            </td>
+                                            <td className='font-mono text-xs'>{op.phoneMasked || '—'}</td>
                                         <td>
                                             <span className='capitalize text-light/80'>
                                                 {op.operationType?.replace(/_/g, ' ') || '—'}
@@ -234,7 +371,8 @@ function ActivityPage() {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

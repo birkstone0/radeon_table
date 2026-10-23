@@ -43,6 +43,7 @@ function DashboardPage() {
     const hasAccounts = Boolean(summary && summary.total > 0);
     const u = auth.user;
     const remaining = u && !isAdmin ? formatRemaining(u.accessExpiresAt) : null;
+    const unlimitedRemaining = u && !isAdmin && u.accessType === 'unlimited' ? formatRemaining(u.unlimitedAccessExpiresAt) : null;
 
     return (
         <div className='page'>
@@ -63,7 +64,17 @@ function DashboardPage() {
                         </>
                     ) : (
                         <>
-                            {u.accessExpired ? (
+                            {u.accessType === 'unlimited' ? (
+                                unlimitedRemaining ? (
+                                    <span className='badge badge-success'>
+                                        <Clock className='w-3 h-3 mr-1' /> Unlimited access {unlimitedRemaining}
+                                    </span>
+                                ) : (
+                                    <span className='badge badge-success'>
+                                        <Clock className='w-3 h-3 mr-1' /> Unlimited access — no expiration
+                                    </span>
+                                )
+                            ) : u.accessExpired ? (
                                 <span className='badge badge-danger'>
                                     <Clock className='w-3 h-3 mr-1' /> Account Access Expired — contact an administrator
                                 </span>
@@ -76,7 +87,7 @@ function DashboardPage() {
                                     <Clock className='w-3 h-3 mr-1' /> No timed access set
                                 </span>
                             )}
-                            {(u.trials?.claim_daily_reward ?? 0) > 0 || (u.trials?.check_balance ?? 0) > 0 ? (
+                            {u.accessType !== 'unlimited' && ((u.trials?.claim_daily_reward ?? 0) > 0 || (u.trials?.check_balance ?? 0) > 0) ? (
                                 <>
                                     <span className='badge badge-neutral'>Claim trials: {u.trials?.claim_daily_reward ?? 0}</span>
                                     <span className='badge badge-neutral'>Balance trials: {u.trials?.check_balance ?? 0}</span>

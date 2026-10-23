@@ -89,6 +89,13 @@ export const operationsApi = {
     cancel: (operationId) => api.post(`/operations/${operationId}/cancel`, {})
 };
 
+export const selectionApi = {
+    createOperationsToken: (filters) => api.post('/selection/operations', filters),
+    getOperationsIds: (token, params) => api.get(`/selection/operations/${token}/ids`, { params }),
+    excludeOperationsIds: (token, ids) => api.post(`/selection/operations/${token}/exclude`, { ids }),
+    clearToken: (token) => api.delete(`/selection/operations/${token}`)
+};
+
 export const adminApi = {
     overview: () => api.get('/admin/overview'),
     users: (params) => api.get('/admin/users', { params }),

@@ -102,6 +102,9 @@ function publicUser(user) {
     const now = Date.now();
     const accessExpiresAt = user.accessExpiresAt ? new Date(user.accessExpiresAt).getTime() : null;
     const accessExpired = user.role === 'user' && accessExpiresAt !== null && accessExpiresAt < now;
+    const accessType = user.accessType || 'limited';
+    const unlimitedAccessExpiresAt = user.unlimitedAccessExpiresAt ? new Date(user.unlimitedAccessExpiresAt).getTime() : null;
+    const unlimitedAccessExpired = accessType === 'unlimited' && unlimitedAccessExpiresAt !== null && unlimitedAccessExpiresAt < now;
     return {
         id: user._id,
         username: user.username,
@@ -114,9 +117,12 @@ function publicUser(user) {
         accessActivatedAt: user.accessActivatedAt || null,
         accessExpiresAt: user.accessExpiresAt || null,
         accessExpired,
+        accessType,
+        unlimitedAccessExpiresAt: user.unlimitedAccessExpiresAt || null,
+        unlimitedAccessExpired,
         // Admins are never charged or blocked by quotas; surface that so the UI
         // can render "Unlimited" instead of the stored zero counters.
-        trialsUnlimited: user.role === 'admin',
+        trialsUnlimited: user.role === 'admin' || accessType === 'unlimited',
         trials: user.trials || { claim_daily_reward: 0, check_balance: 0 }
     };
 }
@@ -136,19 +142,34 @@ function accessBlockedFor(user) {
     if (user.role !== 'user') return { blocked: false };
     if (user.status === 'revoked') return { blocked: true, reason: 'Access revoked' };
     if (user.status === 'deactivated') return { blocked: true, reason: 'Account is deactivated' };
-    if (user.status === 'active' && user.accessExpiresAt && new Date(user.accessExpiresAt).getTime() < Date.now()) {
+
+    const accessType = user.accessType || 'limited';
+    const now = Date.now();
+
+    // For unlimited access users, check unlimitedAccessExpiresAt
+    if (accessType === 'unlimited') {
+        if (user.unlimitedAccessExpiresAt && new Date(user.unlimitedAccessExpiresAt).getTime() < now) {
+            return { blocked: true, reason: 'Unlimited access expired' };
+        }
+        return { blocked: false };
+    }
+
+    // For limited access users, check accessExpiresAt
+    if (user.accessExpiresAt && new Date(user.accessExpiresAt).getTime() < now) {
         return { blocked: true, reason: 'Access expired' };
     }
+
     return { blocked: false };
 }
 
 // Decrement a trial counter atomically. Returns true when the operation was
-// charged, false when the user has no trials left. Admins are never charged.
+// charged, false when the user has no trials left. Admins and unlimited access
+// users are never charged.
 async function consumeTrial(userId, operationType, amount = 1) {
     const user = await User.findById(userId);
     if (!user) return false;
-    // Admins are never charged - always return true for them
-    if (user.role === 'admin') return true;
+    // Admins and unlimited access users are never charged
+    if (user.role === 'admin' || (user.accessType === 'unlimited')) return true;
 
     const res = await User.updateOne(
         {

@@ -58,6 +58,18 @@ const userSchema = new mongoose.Schema({
     accessExpiresAt: {
         type: Date
     },
+    // Access type: 'limited' uses trial quotas and accessExpiresAt; 'unlimited'
+    // bypasses trial deductions but still respects unlimitedAccessExpiresAt.
+    accessType: {
+        type: String,
+        enum: ['limited', 'unlimited'],
+        default: 'limited'
+    },
+    // For unlimited access users: when their unlimited usage expires.
+    // Null means no automatic expiration (until an admin changes it).
+    unlimitedAccessExpiresAt: {
+        type: Date
+    },
     // Trial operation quotas, one counter per operation type. A trial use is
     // counted when the backend accepts the request (not on modal open). Only
     // users with unlimited (null) quotas are exempt from the trial checks.

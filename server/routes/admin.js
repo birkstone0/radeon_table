@@ -53,10 +53,44 @@ router.post('/users/:userId/access', async (req, res, next) => {
         const updates = {};
         const auditMeta = {};
 
-        // --- Timed access ---
+        // --- Access type and unlimited access ---
+        const accessType = req.body.accessType;       // 'limited' | 'unlimited'
+        if (accessType !== undefined && accessType !== null) {
+            if (!['limited', 'unlimited'].includes(accessType)) throw badRequest('Invalid access type');
+            updates.accessType = accessType;
+            auditMeta.accessType = accessType;
+        }
+
+        // --- Unlimited access duration ---
+        const unlimitedDuration = req.body.unlimitedDuration;  // number(ms) or null for no expiration
+        const unlimitedExtend = req.body.unlimitedExtend !== false;
+        if (unlimitedDuration !== undefined && unlimitedDuration !== null) {
+            if (user.accessType !== 'unlimited') {
+                throw badRequest('Cannot set unlimited duration for non-unlimited access type');
+            }
+            const ms = durationMsFor(unlimitedDuration);
+            const base = unlimitedExtend && user.unlimitedAccessExpiresAt && new Date(user.unlimitedAccessExpiresAt).getTime() > Date.now()
+                ? new Date(user.unlimitedAccessExpiresAt).getTime()
+                : Date.now();
+            // If duration is null or undefined, remove expiration (no auto-expire)
+            if (unlimitedDuration === null || unlimitedDuration === undefined) {
+                updates.unlimitedAccessExpiresAt = null;
+            } else if (ms === 0) {
+                updates.unlimitedAccessExpiresAt = new Date(Date.now());
+            } else {
+                updates.unlimitedAccessExpiresAt = new Date(base + ms);
+            }
+            auditMeta.unlimitedDuration = typeof unlimitedDuration === 'number' ? unlimitedDuration : unlimitedDuration;
+            auditMeta.unlimitedExtend = Boolean(unlimitedExtend);
+        }
+
+        // --- Timed access (for limited access type) ---
         const duration = req.body.duration;           // '20m'|'1h'|'1d'|'7d'|'30d'| number(ms)
         const extend = req.body.extend !== false;     // default extends from current expiry
         if (duration !== undefined && duration !== null && duration !== '') {
+            if (user.accessType === 'unlimited') {
+                throw badRequest('Cannot set limited duration for unlimited access type');
+            }
             const ms = durationMsFor(duration);
             const base = extend && user.accessExpiresAt && new Date(user.accessExpiresAt).getTime() > Date.now()
                 ? new Date(user.accessExpiresAt).getTime()

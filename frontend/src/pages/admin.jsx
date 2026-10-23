@@ -17,6 +17,16 @@ const DURATION_OPTIONS = [
     { value: 'custom', label: 'Custom duration…' }
 ];
 
+const UNLIMITED_DURATION_OPTIONS = [
+    { value: '1d', label: '1 day' },
+    { value: '3d', label: '3 days' },
+    { value: '7d', label: '7 days' },
+    { value: '14d', label: '14 days' },
+    { value: '30d', label: '30 days' },
+    { value: 'custom', label: 'Custom duration…' },
+    { value: 'none', label: 'No expiration' }
+];
+
 function formatDate(value) {
     if (!value) return '—';
     const date = new Date(value);
@@ -48,6 +58,11 @@ function userStatusLabel(user) {
     if (user.status === 'deactivated') return { label: 'Suspended', cls: 'badge-danger' };
     if (user.status === 'revoked') return { label: 'Revoked', cls: 'badge-warning' };
     if (user.role !== 'user') return { label: 'Active', cls: 'badge-success' };
+    if (user.accessType === 'unlimited') {
+        if (user.unlimitedAccessExpired) return { label: 'Unlimited Expired', cls: 'badge-danger' };
+        if (!user.unlimitedAccessExpiresAt) return { label: 'Unlimited', cls: 'badge-success' };
+        return { label: 'Unlimited', cls: 'badge-success' };
+    }
     if (user.accessExpired) return { label: 'Expired', cls: 'badge-danger' };
     if (user.accessExpiresAt) return { label: 'Trial', cls: 'badge-success' };
     return { label: 'Active', cls: 'badge-neutral' };
@@ -72,11 +87,17 @@ function ConfirmDialog({ title, message, confirmLabel, onCancel, onConfirm }) {
 
 function EditAccessModal({ user, onClose, onSaved, onError }) {
     const isAdminUser = user.role === 'admin';
+    const [accessType, setAccessType] = useState(user.accessType || 'limited'); // 'limited' | 'unlimited'
     const [durationMode, setDurationMode] = useState('none'); // 'none', 'preset', 'days'
     const [durationPreset, setDurationPreset] = useState('');
     const [customMinutes, setCustomMinutes] = useState('');
     const [days, setDays] = useState('');
     const [extend, setExtend] = useState(false);
+    const [unlimitedDurationMode, setUnlimitedDurationMode] = useState('none'); // 'none', 'preset', 'days'
+    const [unlimitedDurationPreset, setUnlimitedDurationPreset] = useState('');
+    const [unlimitedCustomMinutes, setUnlimitedCustomMinutes] = useState('');
+    const [unlimitedDays, setUnlimitedDays] = useState('');
+    const [unlimitedExtend, setUnlimitedExtend] = useState(false);
     const [updateClaimTrials, setUpdateClaimTrials] = useState(false);
     const [claimTrials, setClaimTrials] = useState(user.trials?.claim_daily_reward ?? 0);
     const [updateBalanceTrials, setUpdateBalanceTrials] = useState(false);
@@ -86,11 +107,12 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
     const [status, setStatus] = useState(user.status || 'active');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [confirmingNoExpiration, setConfirmingNoExpiration] = useState(false);
 
-    // Calculate preview expiry
+    // Calculate preview expiry for limited access
     const previewExpiry = () => {
         if (durationMode === 'none') return user.accessExpiresAt ? formatExpiry(user.accessExpiresAt) : '—';
-        
+
         let ms = 0;
         if (durationMode === 'days') {
             const daysNum = Number(days);
@@ -112,11 +134,48 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
                 ms = DURATION_MS[durationPreset] || 0;
             }
         }
-        
+
         if (ms === 0) return 'Expires now';
-        
+
         const base = extend && user.accessExpiresAt && new Date(user.accessExpiresAt).getTime() > Date.now()
             ? new Date(user.accessExpiresAt).getTime()
+            : Date.now();
+        const newExpiry = new Date(base + ms);
+        return formatExpiry(newExpiry);
+    };
+
+    // Calculate preview expiry for unlimited access
+    const previewUnlimitedExpiry = () => {
+        if (unlimitedDurationMode === 'none') return user.unlimitedAccessExpiresAt ? formatExpiry(user.unlimitedAccessExpiresAt) : 'No expiration';
+
+        if (unlimitedDurationPreset === 'none') return 'No expiration';
+
+        let ms = 0;
+        if (unlimitedDurationMode === 'days') {
+            const daysNum = Number(unlimitedDays);
+            if (!Number.isFinite(daysNum) || daysNum < 0) return 'Invalid days';
+            ms = Math.round(daysNum * 24 * 60 * 60 * 1000);
+        } else if (unlimitedDurationMode === 'preset') {
+            if (unlimitedDurationPreset === 'custom') {
+                const mins = Number(unlimitedCustomMinutes);
+                if (!Number.isFinite(mins) || mins <= 0) return 'Invalid duration';
+                ms = Math.round(mins * 60000);
+            } else {
+                const DURATION_MS = {
+                    '1d': 24 * 60 * 60 * 1000,
+                    '3d': 3 * 24 * 60 * 60 * 1000,
+                    '7d': 7 * 24 * 60 * 60 * 1000,
+                    '14d': 14 * 24 * 60 * 60 * 1000,
+                    '30d': 30 * 24 * 60 * 60 * 1000
+                };
+                ms = DURATION_MS[unlimitedDurationPreset] || 0;
+            }
+        }
+
+        if (ms === 0) return 'Expires now';
+
+        const base = unlimitedExtend && user.unlimitedAccessExpiresAt && new Date(user.unlimitedAccessExpiresAt).getTime() > Date.now()
+            ? new Date(user.unlimitedAccessExpiresAt).getTime()
             : Date.now();
         const newExpiry = new Date(base + ms);
         return formatExpiry(newExpiry);
@@ -127,25 +186,65 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
         setError('');
         try {
             const payload = { status };
-            
-            // Handle duration based on mode
-            if (durationMode === 'days') {
-                const daysNum = Number(days);
-                if (!Number.isFinite(daysNum) || daysNum < 0) throw new Error('Enter a valid number of days (0 or more)');
-                const durationMs = Math.round(daysNum * 24 * 60 * 60 * 1000);
-                payload.duration = durationMs;
-                payload.extend = extend;
-            } else if (durationMode === 'preset' && durationPreset) {
-                let durationMs = null;
-                if (durationPreset === 'custom') {
-                    const mins = Number(customMinutes);
-                    if (!Number.isFinite(mins) || mins <= 0) throw new Error('Enter a valid custom duration in minutes');
-                    durationMs = Math.round(mins * 60000);
+
+            // Handle access type change
+            if (accessType !== (user.accessType || 'limited')) {
+                payload.accessType = accessType;
+            }
+
+            // Handle unlimited access duration
+            if (accessType === 'unlimited' && unlimitedDurationMode !== 'none') {
+                if (unlimitedDurationPreset === 'none') {
+                    // No expiration
+                    payload.unlimitedDuration = null;
+                    payload.unlimitedExtend = false;
                 } else {
-                    durationMs = durationPreset;
+                    let durationMs = null;
+                    if (unlimitedDurationMode === 'days') {
+                        const daysNum = Number(unlimitedDays);
+                        if (!Number.isFinite(daysNum) || daysNum < 0) throw new Error('Enter a valid number of days (0 or more)');
+                        durationMs = Math.round(daysNum * 24 * 60 * 60 * 1000);
+                    } else if (unlimitedDurationMode === 'preset') {
+                        if (unlimitedDurationPreset === 'custom') {
+                            const mins = Number(unlimitedCustomMinutes);
+                            if (!Number.isFinite(mins) || mins <= 0) throw new Error('Enter a valid custom duration in minutes');
+                            durationMs = Math.round(mins * 60000);
+                        } else {
+                            const DURATION_MS = {
+                                '1d': 24 * 60 * 60 * 1000,
+                                '3d': 3 * 24 * 60 * 60 * 1000,
+                                '7d': 7 * 24 * 60 * 60 * 1000,
+                                '14d': 14 * 24 * 60 * 60 * 1000,
+                                '30d': 30 * 24 * 60 * 60 * 1000
+                            };
+                            durationMs = DURATION_MS[unlimitedDurationPreset] || 0;
+                        }
+                    }
+                    payload.unlimitedDuration = durationMs;
+                    payload.unlimitedExtend = unlimitedExtend;
                 }
-                payload.duration = durationMs;
-                payload.extend = extend;
+            }
+
+            // Handle limited access duration (only for limited access type)
+            if (accessType === 'limited' && durationMode !== 'none') {
+                if (durationMode === 'days') {
+                    const daysNum = Number(days);
+                    if (!Number.isFinite(daysNum) || daysNum < 0) throw new Error('Enter a valid number of days (0 or more)');
+                    const durationMs = Math.round(daysNum * 24 * 60 * 60 * 1000);
+                    payload.duration = durationMs;
+                    payload.extend = extend;
+                } else if (durationMode === 'preset' && durationPreset) {
+                    let durationMs = null;
+                    if (durationPreset === 'custom') {
+                        const mins = Number(customMinutes);
+                        if (!Number.isFinite(mins) || mins <= 0) throw new Error('Enter a valid custom duration in minutes');
+                        durationMs = Math.round(mins * 60000);
+                    } else {
+                        durationMs = durationPreset;
+                    }
+                    payload.duration = durationMs;
+                    payload.extend = extend;
+                }
             }
 
             // Only include trials for selected checkboxes
@@ -170,7 +269,10 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
             }
 
             // Require at least one change
-            if (durationMode === 'none' && Object.keys(trials).length === 0 && !updateMaxAccounts && status === user.status) {
+            const hasAccessTypeChange = accessType !== (user.accessType || 'limited');
+            const hasDurationChange = (accessType === 'limited' && durationMode !== 'none') ||
+                                     (accessType === 'unlimited' && unlimitedDurationMode !== 'none');
+            if (!hasAccessTypeChange && !hasDurationChange && Object.keys(trials).length === 0 && !updateMaxAccounts && status === user.status) {
                 throw new Error('Make at least one change to save');
             }
 
@@ -236,8 +338,160 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
 
                     <div className='divider my-1' />
 
+                    {/* Access Type */}
+                    {!isAdminUser && (
+                        <div>
+                            <p className='label'>Access Type</p>
+                            <div className='grid grid-cols-2 gap-2'>
+                                <button
+                                    type='button'
+                                    onClick={() => {
+                                        setAccessType('limited');
+                                        setUnlimitedDurationMode('none');
+                                        setUnlimitedDurationPreset('');
+                                    }}
+                                    className={cn(
+                                        'btn btn-ghost text-xs',
+                                        accessType === 'limited' ? 'btn-primary' : ''
+                                    )}
+                                >
+                                    Limited Access
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => {
+                                        setAccessType('unlimited');
+                                        setDurationMode('none');
+                                        setDurationPreset('');
+                                    }}
+                                    className={cn(
+                                        'btn btn-ghost text-xs',
+                                        accessType === 'unlimited' ? 'btn-primary' : ''
+                                    )}
+                                >
+                                    Unlimited Access
+                                </button>
+                            </div>
+                            {accessType === 'unlimited' && (
+                                <p className='mt-2 text-xs text-light/60'>
+                                    User can perform unlimited operations without trial quota deductions.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Unlimited Access Duration */}
+                    {accessType === 'unlimited' && !isAdminUser && (
+                        <div>
+                            <p className='label'>Unlimited Access Duration</p>
+                            <div className='space-y-3'>
+                                <div className='grid grid-cols-3 gap-2'>
+                                    <button
+                                        type='button'
+                                        onClick={() => { setUnlimitedDurationMode('none'); setUnlimitedDurationPreset(''); setUnlimitedDays(''); }}
+                                        className={cn(
+                                            'btn btn-ghost text-xs',
+                                            unlimitedDurationMode === 'none' ? 'btn-primary' : ''
+                                        )}
+                                    >
+                                        No change
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => { setUnlimitedDurationMode('days'); setUnlimitedDurationPreset(''); }}
+                                        className={cn(
+                                            'btn btn-ghost text-xs',
+                                            unlimitedDurationMode === 'days' ? 'btn-primary' : ''
+                                        )}
+                                    >
+                                        Exact days
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => { setUnlimitedDurationMode('preset'); setUnlimitedDays(''); }}
+                                        className={cn(
+                                            'btn btn-ghost text-xs',
+                                            unlimitedDurationMode === 'preset' ? 'btn-primary' : ''
+                                        )}
+                                    >
+                                        Preset
+                                    </button>
+                                </div>
+
+                                {unlimitedDurationMode === 'days' && (
+                                    <div className='grid grid-cols-2 gap-2'>
+                                        <input
+                                            type='number'
+                                            min='0'
+                                            step='1'
+                                            placeholder='Days (e.g., 7, 14, 0)'
+                                            value={unlimitedDays}
+                                            onChange={(e) => setUnlimitedDays(e.target.value)}
+                                            className='input'
+                                        />
+                                        <label className='mt-2 flex items-center gap-2 text-xs text-light/70'>
+                                            <input
+                                                type='checkbox'
+                                                checked={unlimitedExtend}
+                                                onChange={(e) => setUnlimitedExtend(e.target.checked)}
+                                                className='accent-accent'
+                                            />
+                                            Extend from current expiry
+                                        </label>
+                                    </div>
+                                )}
+
+                                {unlimitedDurationMode === 'preset' && (
+                                    <div className='grid grid-cols-2 gap-2'>
+                                        <select value={unlimitedDurationPreset} onChange={(e) => setUnlimitedDurationPreset(e.target.value)} className='input'>
+                                            <option value=''>Select preset…</option>
+                                            {UNLIMITED_DURATION_OPTIONS.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                            ))}
+                                        </select>
+                                        {unlimitedDurationPreset === 'custom' && (
+                                            <input
+                                                type='number'
+                                                min='1'
+                                                placeholder='Minutes'
+                                                value={unlimitedCustomMinutes}
+                                                onChange={(e) => setUnlimitedCustomMinutes(e.target.value)}
+                                                className='input'
+                                            />
+                                        )}
+                                        {unlimitedDurationPreset && (
+                                            <label className='mt-2 flex items-center gap-2 text-xs text-light/70 col-span-2'>
+                                                <input
+                                                    type='checkbox'
+                                                    checked={unlimitedExtend}
+                                                    onChange={(e) => setUnlimitedExtend(e.target.checked)}
+                                                    className='accent-accent'
+                                                />
+                                                Extend from current expiry (don't reset)
+                                            </label>
+                                        )}
+                                    </div>
+                                )}
+
+                                {(unlimitedDurationMode === 'days' || (unlimitedDurationMode === 'preset' && unlimitedDurationPreset)) && (
+                                    <>
+                                        <p className='text-xs text-accent'>
+                                            Current expiry: {user.unlimitedAccessExpiresAt ? formatExpiry(user.unlimitedAccessExpiresAt) : 'No expiration'}
+                                        </p>
+                                        <p className='text-xs text-accent'>
+                                            Resulting expiry: {previewUnlimitedExpiry()}
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className='divider my-1' />
+
                     {/* Access Duration */}
-                    <div>
+                    {accessType === 'limited' && (
+                        <div>
                         <p className='label'>Access Duration</p>
                         <div className='space-y-3'>
                             {/* Duration mode selector */}
@@ -344,6 +598,7 @@ function EditAccessModal({ user, onClose, onSaved, onError }) {
                             )}
                         </div>
                     </div>
+                    )}
 
                     <div className='divider my-1' />
 
