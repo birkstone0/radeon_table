@@ -33,13 +33,18 @@ async function createApp() {
     // CORS for cross-origin deployments (e.g., Netlify frontend + Render backend)
     // Only configure CORS if CLIENT_ORIGIN is set
     if (config.corsOrigin) {
+        // Normalize origins to handle optional trailing slashes
+        const normalizeOrigin = (o) => o ? o.replace(/\/$/, '') : '';
+        const allowedOrigin = normalizeOrigin(config.corsOrigin);
+
         app.use((req, res, next) => {
             const origin = req.headers.origin;
-            if (origin === config.corsOrigin) {
+            if (normalizeOrigin(origin) === allowedOrigin) {
                 res.setHeader('Access-Control-Allow-Origin', origin);
                 res.setHeader('Access-Control-Allow-Credentials', 'true');
                 res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
                 res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+                res.setHeader('Vary', 'Origin');
             }
             if (req.method === 'OPTIONS') {
                 return res.sendStatus(204);

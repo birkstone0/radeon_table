@@ -33,6 +33,14 @@ function extractMessage(error) {
     const data = error.response && error.response.data;
     if (data && data.error && data.error.message) return data.error.message;
     if (error.message) return error.message;
+    // Network errors (CORS, timeout, no internet) without a response
+    if (!error.response && error.code === 'ERR_NETWORK') {
+        // Distinguish CORS from other network issues
+        if (error.config && error.config.withCredentials) {
+            return 'Connection error: Unable to reach the server. This may be a CORS configuration issue or the server is unavailable.';
+        }
+        return 'Network error: Unable to connect to the server. Please check your connection.';
+    }
     return 'Unexpected error';
 }
 
