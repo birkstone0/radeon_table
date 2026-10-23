@@ -33,6 +33,7 @@ function extractMessage(error) {
     const data = error.response && error.response.data;
     if (data && data.error && data.error.message) return data.error.message;
     if (error.message) return error.message;
+
     // Network errors (CORS, timeout, no internet) without a response
     if (!error.response && error.code === 'ERR_NETWORK') {
         // Distinguish CORS from other network issues
@@ -41,6 +42,21 @@ function extractMessage(error) {
         }
         return 'Network error: Unable to connect to the server. Please check your connection.';
     }
+
+    // Distinguish HTTP status codes
+    if (error.response) {
+        const status = error.response.status;
+        if (status === 404) {
+            return 'Resource not found. The requested endpoint does not exist.';
+        }
+        if (status === 403) {
+            return 'Access forbidden. You do not have permission to perform this action.';
+        }
+        if (status === 500) {
+            return 'Server error. An unexpected error occurred on the server.';
+        }
+    }
+
     return 'Unexpected error';
 }
 
