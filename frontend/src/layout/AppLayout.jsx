@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../state/auth';
 import { cn } from '../styles/utils';
-import { Home, Users, ActivitySquare, LogOut, Settings, UserCog, Menu, X, ChevronLeft } from 'lucide-react';
+import { Home, Users, ActivitySquare, LogOut, Settings, UserCog, Menu, X, ChevronLeft, UserPlus } from 'lucide-react';
 import OperationProgressModal from '../components/OperationProgressModal';
 import { subscribeProgress, setProgressMinimized, closeProgress } from '../lib/operationProgress';
 
@@ -70,6 +70,7 @@ function AppLayout() {
     const regularNav = [
         { to: '/', label: 'Dashboard', icon: Home },
         { to: '/accounts', label: 'Accounts', icon: Users },
+        { to: '/register', label: 'Register Account', icon: UserPlus },
         { to: '/activity', label: 'Activity', icon: ActivitySquare }
     ];
 

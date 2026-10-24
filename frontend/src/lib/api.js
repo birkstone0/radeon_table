@@ -89,7 +89,24 @@ export const operationsApi = {
     cancel: (operationId) => api.post(`/operations/${operationId}/cancel`, {})
 };
 
+// Registration workflow (adapts register.js for the web console): enqueue phone
+// numbers with a shared password, start one account at a time, and submit
+// OTP retrieval for the awaitng account. Nothing sensitive is ever returned.
+export const registerApi = {
+    enqueue: (payload) => api.post('/register/enqueue', payload),
+    list: () => api.get('/register'),
+    start: () => api.post('/register/start', {}),
+    submitOtp: (queueId, otp) => api.post(`/register/${queueId}/otp`, { otp }),
+    cancel: (queueId) => api.post(`/register/${queueId}/cancel`, {}),
+    remove: (queueId) => api.delete(`/register/${queueId}`),
+    requeue: (queueId) => api.post(`/register/${queueId}/requeue`, {}),
+    pause: () => api.post('/register/pause', {}),
+    resume: () => api.post('/register/resume', {}),
+    clear: () => api.post('/register/clear', { confirm: true })
+};
+
 export const selectionApi = {
+    createAccountsToken: (filters) => api.post('/selection/accounts', filters),
     createAccountsToken: (filters) => api.post('/selection/accounts', filters),
     getAccountsIds: (token, params) => api.get(`/selection/accounts/${token}/ids`, { params }),
     excludeAccountsIds: (token, ids) => api.post(`/selection/accounts/${token}/exclude`, { ids }),

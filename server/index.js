@@ -17,6 +17,7 @@ const { ensureInitialUsers } = users;
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/accounts');
 const operationRoutes = require('./routes/operations');
+const registerRoutes = require('./routes/register');
 const adminRoutes = require('./routes/admin');
 const selectionRoutes = require('./routes/selection');
 
@@ -78,6 +79,7 @@ async function createApp() {
     app.use('/api/auth', authRoutes);
     app.use('/api/accounts', require('./middleware/auth').requireAuth, accountRoutes);
     app.use('/api/operations', require('./middleware/auth').requireAuth, operationRoutes);
+    app.use('/api/register', require('./middleware/auth').requireAuth, registerRoutes);
     app.use('/api/selection', require('./middleware/auth').requireAuth, selectionRoutes);
     app.use('/api/admin', require('./middleware/auth').requireAuth, require('./middleware/auth').requireAdmin, adminRoutes);
 
