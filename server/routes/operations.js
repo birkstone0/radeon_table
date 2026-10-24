@@ -6,7 +6,7 @@ const operations = require('../services/operations');
 const accounts = require('../services/accounts');
 const { badRequest } = require('../lib/errors');
 const { parsePagination } = require('../lib/validate');
-const { MAX_BATCH_STATUS_OPERATIONS, SELECTION_BATCH_SIZE } = require('../config/limits');
+const { MAX_RECORDS_PER_OPERATION, MAX_BATCH_STATUS_OPERATIONS, SELECTION_BATCH_SIZE } = require('../config/limits');
 
 const router = express.Router();
 

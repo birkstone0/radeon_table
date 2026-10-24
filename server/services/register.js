@@ -22,6 +22,9 @@ const fs = require('fs');
 const path = require('path');
 const CryptoJS = require('crypto-js');
 const RegistrationQueue = require('../models/RegistrationQueue');
+const Account = require('../models/Account');
+const ImportBatch = require('../models/ImportBatch');
+const credentials = require('../lib/credentials');
 const { maskPhone } = require('../lib/mask');
 const { badRequest, conflict, notFound, forbidden, tooManyRequests } = require('../lib/errors');
 const users = require('../lib/users');
@@ -123,6 +126,81 @@ function appendToAccountsFile(localPhone) {
         fs.appendFileSync(accountsPath, `\n${localPhone}`);
     } catch (e) {
         logger.warn('REGISTER', `Could not append to accounts file: ${e.message}`);
+    }
+}
+
+// Persist a successfully created account into the canonical Account collection
+// so it immediately appears in the Accounts table. Reuses the existing
+// credential and ImportBatch architecture; never duplicates an existing record.
+async function persistRegisteredAccount({ ownerId, localPhone, password }) {
+    try {
+        const existing = await Account.findOne({ ownerId, phone: localPhone });
+        if (existing) {
+            // Reconcile: refresh credential and ensure the account looks usable.
+            const newRef = credentials.create(ownerId, localPhone, password);
+            // Remove stale credential reference if any (best-effort).
+            if (existing.credRef) credentials.remove(ownerId, existing.credRef);
+            await Account.updateOne(
+                { _id: existing._id },
+                {
+                    credRef: newRef,
+                    source: 'registered',
+                    validationStatus: 'valid',
+                    lastResult: 'Registered and reconciled',
+                    lastError: null,
+                }
+            );
+            await audit.record({
+                actor: { id: ownerId, username: null },
+                action: 'register.reconciled',
+                targetType: 'account',
+                targetId: existing._id,
+                metadata: { phoneMasked: maskPhone(localPhone) }
+            });
+            return { reconciled: true, accountId: existing._id };
+        }
+
+        let batchId = null;
+        try {
+            const batch = await ImportBatch.create({
+                ownerId,
+                method: 'registered',
+                total: 1,
+                valid: 1,
+                invalid: 0,
+                duplicates: 0
+            });
+            batchId = batch._id;
+        } catch (_) {
+            // Non-fatal: account can be created without a batch row.
+        }
+
+        const account = await Account.create({
+            ownerId,
+            phone: localPhone,
+            phoneMasked: maskPhone(localPhone),
+            credRef: credentials.create(ownerId, localPhone, password),
+            source: 'registered',
+            importBatchId: batchId,
+            validationStatus: 'valid',
+            processingStatus: 'pending',
+            lastResult: 'Successfully registered',
+            lastError: null,
+            lastActivityAt: new Date()
+        });
+        await audit.record({
+            actor: { id: ownerId, username: null },
+            action: 'register.persisted',
+            targetType: 'account',
+            targetId: account._id,
+            metadata: { phoneMasked: maskPhone(localPhone), source: 'registered' }
+        });
+        return { created: true, accountId: account._id };
+    } catch (e) {
+        // Registration itself succeeded (code===0); a DB issue must not flip
+        // the queue row to failed. Surface a warning but keep queue success.
+        logger.warn('REGISTER', `Failed to persist registered account ${maskPhone(localPhone)}: ${e.message}`);
+        return { error: e.message };
     }
 }
 
@@ -451,6 +529,7 @@ async function submitOtp(ownerId, queueId, otp) {
         outcome = await submitRegistration(apiPhone, local, secret.password, otp, secret.deviceId, ticket);
         if (outcome.success) {
             appendToAccountsFile(local);
+            await persistRegisteredAccount({ ownerId, localPhone: local, password: secret.password });
         }
     } catch (error) {
         // A network/timeout error does not mean the account was NOT created: the

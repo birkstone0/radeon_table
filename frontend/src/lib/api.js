@@ -107,7 +107,6 @@ export const registerApi = {
 
 export const selectionApi = {
     createAccountsToken: (filters) => api.post('/selection/accounts', filters),
-    createAccountsToken: (filters) => api.post('/selection/accounts', filters),
     getAccountsIds: (token, params) => api.get(`/selection/accounts/${token}/ids`, { params }),
     excludeAccountsIds: (token, ids) => api.post(`/selection/accounts/${token}/exclude`, { ids }),
     clearAccountsToken: (token) => api.delete(`/selection/accounts/${token}`),

@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './layout/AppLayout';
 import { useAuth } from './state/auth';
-import { DashboardPage, AccountsPage, ActivityPage, LoginPage, UserManagementPage, SettingsPage, RegisterPage } from './pages';
+import { DashboardPage, AccountsPage, ActivityPage, LoginPage, UserManagementPage, SettingsPage } from './pages';
 
 function ProtectedRoute({ children, adminOnly = false }) {
     const auth = useAuth();
@@ -42,7 +42,6 @@ function App() {
             >
                 <Route index element={<DashboardPage />} />
                 <Route path='accounts' element={<AccountsPage />} />
-                <Route path='register' element={<RegisterPage />} />
                 <Route path='activity' element={<ActivityPage />} />
                 <Route
                     path='admin/users'

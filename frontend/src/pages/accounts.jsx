@@ -5,13 +5,14 @@
 // carries masked numbers, and confirming an import sends only the phone plus the
 // password the user just supplied in the browser.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, FileText, Phone, Trash2, Play, Search, Eye, EyeOff, AlertTriangle, X, CheckSquare, Square, XCircle } from 'lucide-react';
+import { Upload, FileText, Phone, Trash2, Play, Search, Eye, EyeOff, AlertTriangle, X, CheckSquare, Square, XCircle, UserPlus } from 'lucide-react';
 import { accountsApi, operationsApi, selectionApi } from '../lib/api';
 import { addToast } from '../lib/toast';
 import { cn } from '../styles/utils';
 import { openProgress, hasActiveOperation } from '../lib/operationProgress';
 import { useAuth } from '../state/auth';
 import { MAX_IMPORT_RECORDS, MAX_RECORDS_PER_OPERATION } from '../config/limits';
+import RegisterAccountModal from '../components/RegisterAccountModal';
 
 // Client-side parse of "phone:password" lines. This keeps the exact line
 // numbering the backend preview uses so the confirmed records can be matched
@@ -69,6 +70,7 @@ function AccountsPage() {
     const isAdmin = Boolean(auth.user && auth.user.role === 'admin');
 
     const [search, setSearch] = useState('');
+    const [searchInput, setSearchInput] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
 
     const [selectedIds, setSelectedIds] = useState([]);
@@ -90,6 +92,13 @@ function AccountsPage() {
     const [preview, setPreview] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [importing, setImporting] = useState(false);
+
+    const [showRegister, setShowRegister] = useState(false);
+    const registerRefreshRef = useRef(0);
+    const handleRegistered = useCallback(() => {
+        if (registerRefreshRef.current) clearTimeout(registerRefreshRef.current);
+        registerRefreshRef.current = setTimeout(() => { loadAccounts({ page: 1 }); }, 400);
+    }, [loadAccounts]);
 
     const [running, setRunning] = useState(false);
     const fileInputRef = useRef(null);
@@ -170,35 +179,39 @@ function AccountsPage() {
 
     const toggleSelect = (id) => {
         if (selectAllMode === 'all') {
-            // In global select mode, deselect means exclude from selection
             if (selectionToken) {
-                selectionApi.excludeAccountsIds(selectionToken, [id]).then(({ data }) => {
+                const tokenAtCall = selectionToken;
+                selectionApi.excludeAccountsIds(tokenAtCall, [id]).then(({ data }) => {
                     setSelectedCount(data.remainingCount);
                 }).catch(err => {
                     addToast(err.message || 'Failed to update selection', 'error');
                 });
             }
         } else {
-            // Page selection mode
             setSelectedIds(current => {
-                if (current.includes(id)) {
-                    return current.filter(value => value !== id);
-                } else {
-                    return [...current, id];
-                }
+                const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id];
+                setSelectedCount(next.length);
+                return next;
             });
-            setSelectedCount(selectedIds.includes(id) ? selectedIds.length - 1 : selectedIds.length + 1);
         }
     };
 
     // Clear selection when filters change
+    const selectionTokenRef = useRef(null);
+    useEffect(() => { selectionTokenRef.current = selectionToken; }, [selectionToken]);
     useEffect(() => {
-        clearSelection();
+        const tokenAtEffect = selectionTokenRef.current;
+        if (tokenAtEffect) selectionApi.clearAccountsToken(tokenAtEffect).catch(() => {});
+        setSelectionToken(null);
+        setSelectedCount(0);
+        setSelectAllMode('none');
+        setSelectedIds([]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search, statusFilter]);
 
     const applyFilter = (event) => {
         event.preventDefault();
-        loadAccounts({ page: 1 });
+        setSearch(searchInput.replace(/[^0-9]/g, ''));
     };
 
     // --- Import: file picker / drag and drop ---
@@ -396,6 +409,9 @@ function AccountsPage() {
                     <button className='btn btn-accent' onClick={startSharedImport}>
                         <Phone className='h-4 w-4 shrink-0' /> Shared Password
                     </button>
+                    <button className='btn btn-accent' onClick={() => setShowRegister(true)}>
+                        <UserPlus className='h-4 w-4 shrink-0' /> Register Account
+                    </button>
                     {accounts.length > 0 && (
                         <button className='btn btn-danger' onClick={clearRecords}>
                             <Trash2 className='h-4 w-4 shrink-0' /> Clear Records
@@ -414,8 +430,8 @@ function AccountsPage() {
                         id='account-search'
                         className='input'
                         placeholder='e.g. 0917'
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value.replace(/[^0-9]/g, ''))}
+                        value={searchInput}
+                        onChange={(event) => setSearchInput(event.target.value.replace(/[^0-9]/g, ''))}
                     />
                 </div>
                 <div className='min-w-[160px]'>
@@ -761,6 +777,7 @@ function AccountsPage() {
                     </div>
                 </div>
             )}
+            <RegisterAccountModal open={showRegister} onClose={() => setShowRegister(false)} onRegistered={handleRegistered} />
         </div>
     );
 }
